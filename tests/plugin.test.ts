@@ -6,6 +6,12 @@ import { test } from 'node:test'
 import type { Context } from '@deepseek-ai/cordis'
 import { Config } from '../src/dsh/config.ts'
 import { apply } from '../src/dsh/plugin.ts'
+import { Runtime } from '../src/dsh/runtime.ts'
+import { MemorySecrets } from '../src/core/secrets.ts'
+import type { MishuConfig } from '../src/dsh/config.ts'
+
+/** Never the real keychain or a real mail server in tests. */
+const offline = (config: MishuConfig) => new Runtime(config, { info() {}, warn() {} }, new MemorySecrets(), { unread: async () => [] })
 import { addDays, addMonths, dayOf } from '../src/core/time.ts'
 
 /** Due tomorrow, so it is on the list at once whatever day the tests run. */
@@ -55,7 +61,7 @@ test('the shell mounts with schema defaults, gates mishu_add behind approval, an
     const config = Config({ home, language: 'zh', github: { enabled: false } })
     assert.equal(config.github.markRead, 'shadow', 'marking read starts in shadow mode')
     assert.equal(config.leadDays.document, 90)
-    apply(dsh.ctx, config)
+    apply(dsh.ctx, config, offline(config))
     await new Promise(resolve => setTimeout(resolve, 20))
     assert.deepEqual(dsh.tools.map(t => t.name), ['mishu_add', 'mishu_list', 'mishu_update', 'mishu_stop'])
 
@@ -79,7 +85,7 @@ test('the shell mounts with schema defaults, gates mishu_add behind approval, an
     assert.match((await dsh.command('交代')).text, /还没有交代过事情/)
     assert.equal((await dsh.command('完成 abc')).kind, 'error')
     assert.match((await dsh.command('帮助')).text, /\/mishu 同步/)
-    assert.equal((await dsh.command('同步')).kind, 'error')
+    assert.equal((await dsh.command('同步')).kind, 'success', 'sync now covers mail too, so it runs even with GitHub off')
   } finally {
     await dsh.dispose()
     rmSync(home, { recursive: true, force: true })
@@ -91,7 +97,8 @@ test('in English, the same shell speaks English and still accepts Chinese comman
   const dsh = fakeDsh()
   try {
     assert.equal(Config({}).language, 'auto')
-    apply(dsh.ctx, Config({ home, language: 'en', github: { enabled: false } }))
+    const en = Config({ home, language: 'en', github: { enabled: false } })
+    apply(dsh.ctx, en, offline(en))
     await new Promise(resolve => setTimeout(resolve, 20))
     const due = tomorrow()
     const args = { title: 'Pay rent', due, repeat: 'monthly', category: 'bill' }
@@ -101,7 +108,7 @@ test('in English, the same shell speaks English and still accepts Chinese comman
     assert.match((await dsh.command('')).text, /To handle \(1\)\n#1 \[Noted·Bill\] Pay rent/)
     assert.match((await dsh.command('完成 1')).text, /#1 Pay rent marked done/)
     assert.ok((await dsh.command('series')).text.includes(`#1 Pay rent · monthly on day ${Number(due.slice(8))}${Number(due.slice(8)) >= 29 ? ' (month end when shorter)' : ''}; next ${addMonths(due, 1)}`))
-    assert.match((await dsh.command('help')).text, /\/mishu sync — sync GitHub now/)
+    assert.match((await dsh.command('help')).text, /\/mishu sync — sync now \(GitHub and mail\)/)
     await assert.rejects(dsh.tool('mishu_add').execute({ title: 'x', due: 'soon' }), /not a valid date/)
   } finally {
     await dsh.dispose()

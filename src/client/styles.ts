@@ -75,5 +75,20 @@ export const STYLES = `
 .mishu-field input,.mishu-field select{font:inherit;font-size:13px;color:${TEXT};background:${LAYER2};border:1px solid ${LINE_STRONG};border-radius:6px;padding:4px 6px;width:100%}
 .mishu-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .mishu-preview{white-space:pre-wrap;font-size:12px;background:${LAYER2};border-radius:6px;padding:6px 8px;margin:4px 0 6px;color:${TEXT}}
-@media (max-width:820px){.mishu-columns{grid-template-columns:1fr;gap:12px}.mishu-divider{display:none}.mishu-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mishu-title{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.mishu-tabs{display:flex;gap:2px;background:${LAYER1};border-radius:8px;padding:2px}
+.mishu-tabs button{font:inherit;font-size:13px;color:${MUTED};background:transparent;border:0;border-radius:6px;padding:3px 12px;cursor:pointer}
+.mishu-tabs button.active{background:${LAYER2};color:${TEXT}}
+.mishu-filters{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.mishu-chip{font:inherit;font-size:12px;color:${MUTED};background:transparent;border:1px solid ${LINE_STRONG};border-radius:999px;padding:2px 10px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.mishu-chip span{color:${FAINT}}
+.mishu-chip.active{border-color:${ACCENT};color:${ACCENT}}
+.mishu-chip.active span{color:${ACCENT}}
+.mishu-settings{display:flex;flex-direction:column;gap:12px;max-width:760px}
+.mishu-panel{background:${LAYER1};border-radius:12px;padding:12px 14px}
+.mishu-panel h2{font-size:14px;font-weight:600;margin:0 0 8px}
+.mishu-grid5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:8px}
+.mishu-check{display:flex;align-items:center;gap:6px;font-size:13px;margin:4px 0 8px;color:${TEXT}}
+.mishu-ok{padding:6px 10px;border-radius:8px;border:1px solid ${OK};color:${OK};font-size:12px}
+@media (max-width:820px){.mishu-columns{grid-template-columns:1fr;gap:12px}.mishu-divider{display:none}.mishu-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.mishu-grid5{grid-template-columns:repeat(2,minmax(0,1fr))}}
 `

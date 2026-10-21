@@ -8,6 +8,7 @@
 import { bi, decode, pick, type Bi, type Lang } from './i18n.ts'
 import { upcoming } from './manual.ts'
 import { isActive } from './matters.ts'
+import { mailReportKey, type MailSyncReport } from './mail/sync.ts'
 import { CATEGORY_LABELS, type Category } from './recur.ts'
 import type { Matter, MishuStore } from './store.ts'
 import type { GithubSyncReport, MarkReadMode } from './github/sync.ts'
@@ -36,6 +37,16 @@ export const REASON_LABELS: Record<string, Bi> = {
   reopened: bi('你重新打开的', 'reopened by you'),
   'done-by-you': bi('你标了完成', 'done by you'),
   'dismissed-by-you': bi('你标了忽略', 'dismissed by you'),
+  'mail-to-you': bi('写给你的邮件', 'written to you'),
+  'mail-invite': bi('日程邀请', 'invitation'),
+  'mail-bill': bi('账单或缴费', 'bill or payment'),
+  'mail-github': bi('GitHub 通知邮件', 'GitHub notification mail'),
+  'mail-code': bi('验证码', 'verification code'),
+  'mail-newsletter': bi('群发邮件', 'bulk mail'),
+  'mail-automated': bi('自动发送的邮件', 'automated mail'),
+  'mail-cc': bi('只是抄送', 'Cc only'),
+  'read-in-mail': bi('你在邮箱里看过了', 'read in your mail'),
+  'account-removed': bi('邮箱账户已移除', 'mail account removed'),
 }
 
 export function reasonLabel(reason: string | null, lang: Lang): string {
@@ -45,11 +56,15 @@ export function reasonLabel(reason: string | null, lang: Lang): string {
 }
 
 /** GitHub matters in the order they usually deserve attention. */
-const GITHUB_PRIORITY = ['review-requested', 'mentioned', 'assigned', 'your-pr', 'commit-comment', 'ci-failing', 'fork-upstream-schedule', 'check-failed', 'unclassified']
+/** Source items in the order they usually deserve attention: someone waiting on you first. */
+const PRIORITY = [
+  'review-requested', 'mentioned', 'assigned', 'mail-invite', 'mail-to-you', 'mail-bill',
+  'your-pr', 'commit-comment', 'ci-failing', 'fork-upstream-schedule', 'check-failed', 'unclassified',
+]
 
 function priority(m: Matter): number {
-  const index = GITHUB_PRIORITY.indexOf(m.reason ?? '')
-  return index === -1 ? GITHUB_PRIORITY.length : index
+  const index = PRIORITY.indexOf(m.reason ?? '')
+  return index === -1 ? PRIORITY.length : index
 }
 
 /** Manual matters first by due day (overdue on top), then GitHub by priority. */
@@ -65,6 +80,7 @@ function sourceTag(m: Matter, lang: Lang): string {
     return `${pick(bi('交代', 'Noted'), lang)}·${label === undefined ? m.kind : pick(label, lang)}`
   }
   if (m.source === 'github') return 'GitHub'
+  if (m.source === 'mail') return pick(bi('邮件', 'Mail'), lang)
   return m.source
 }
 
@@ -97,6 +113,8 @@ export interface BriefOptions {
   github?: { enabled: boolean; markRead: MarkReadMode }
   /** How far ahead "coming up" looks. */
   upcomingDays?: number
+  /** Mail accounts, for their status lines. */
+  mailAccounts?: Array<{ id: number; label: string }>
 }
 
 function countByReason(matters: Matter[], lang: Lang): string {
@@ -168,6 +186,12 @@ export function renderBrief(store: MishuStore, options: BriefOptions): string {
         ? `GitHub：${formatMoment(last.at, now)} 同步，${last.notifications} 条未读通知${failed}，用了 ${last.apiCalls} 次 API。`
         : `GitHub: synced ${formatMoment(last.at, now)}, ${last.notifications} unread notifications${failed}, ${last.apiCalls} API calls.`)
     }
+  }
+  for (const account of options.mailAccounts ?? []) {
+    const report = store.get<MailSyncReport>(mailReportKey(account.id))
+    if (report === undefined) out.push(zh ? `邮件「${account.label}」：还没收过。` : `Mail "${account.label}": not checked yet.`)
+    else if (report.error !== undefined) out.push(zh ? `邮件「${account.label}」：${formatMoment(report.at, now)} 没收成：${report.error.zh}` : `Mail "${account.label}": failed at ${formatMoment(report.at, now)}: ${report.error.en}`)
+    else out.push(zh ? `邮件「${account.label}」：${formatMoment(report.at, now)} 收信，${report.messages} 封未读。` : `Mail "${account.label}": checked ${formatMoment(report.at, now)}, ${report.messages} unread.`)
   }
   return out.join('\n')
 }

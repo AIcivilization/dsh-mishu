@@ -10,9 +10,23 @@
 
 import { useCallback, useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { mishuApi, type BoardCard, type BoardData, type CardAction, type MatterDetail, type NewItem } from './api.ts'
+import { MishuSettings } from './Settings.tsx'
 import { TEXT, uiLang, type UiLang } from './text.ts'
 
 type Column = 'handle' | 'remember' | 'done'
+type Source = 'all' | BoardCard['source']
+
+const SOURCE_KEY = 'dsh-mishu.source'
+
+function loadSource(): Source {
+  try {
+    const value = localStorage.getItem(SOURCE_KEY)
+    if (value === 'github' || value === 'mail' || value === 'manual') return value
+  } catch {
+    // storage blocked: show everything
+  }
+  return 'all'
+}
 
 const REFRESH_MS = 60_000
 const WIDTHS_KEY = 'dsh-mishu.columns'
@@ -54,6 +68,12 @@ export function MishuBoard({ locale }: { locale: () => string }) {
   const [syncing, setSyncing] = useState(false)
   const [dropOn, setDropOn] = useState<Column | undefined>()
   const [widths, setWidths] = useState<[number, number, number]>(loadWidths)
+  const [tab, setTab] = useState<'board' | 'settings'>('board')
+  const [source, setSourceState] = useState<Source>(loadSource)
+  const setSource = (next: Source) => {
+    setSourceState(next)
+    try { localStorage.setItem(SOURCE_KEY, next) } catch { /* this visit only */ }
+  }
   const dragged = useRef<{ card: BoardCard; from: Column } | undefined>(undefined)
   const columnsRef = useRef<HTMLDivElement | null>(null)
   const lang: UiLang = board?.lang ?? uiLang(locale())
@@ -182,7 +202,24 @@ export function MishuBoard({ locale }: { locale: () => string }) {
     )
   }
 
-  const { metrics, columns } = board
+  const { metrics } = board
+  const keep = (card: BoardCard) => source === 'all' || card.source === source
+  const columns = {
+    handle: board.columns.handle.filter(keep),
+    remember: board.columns.remember.filter(keep),
+    done: (() => {
+      const groups = board.columns.done.groups.map(g => ({ ...g, items: g.items.filter(keep) })).filter(g => g.items.length > 0)
+      return { total: groups.reduce((n, g) => n + g.items.length, 0), groups }
+    })(),
+  }
+  const everything = [...board.columns.handle, ...board.columns.remember, ...board.columns.done.groups.flatMap(g => g.items)]
+  const count = (s: Source) => everything.filter(c => s === 'all' || c.source === s).length
+  const sources: Array<{ id: Source; label: string }> = [
+    { id: 'all', label: t.all },
+    { id: 'github', label: t.sourceGithub },
+    { id: 'mail', label: t.sourceMail },
+    { id: 'manual', label: t.sourceManual },
+  ]
   const template = `minmax(0, ${widths[0]}fr) 10px minmax(0, ${widths[1]}fr) 10px minmax(0, ${widths[2]}fr)`
   const divider = (index: 0 | 1) => (
     <div
@@ -197,12 +234,21 @@ export function MishuBoard({ locale }: { locale: () => string }) {
   return (
     <div className="mishu-page" data-mishu-board="">
       <div className="mishu-head">
-        <h1>{t.title}</h1>
+        <div className="mishu-title">
+          <h1>{t.title}</h1>
+          <div className="mishu-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={tab === 'board'} className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>{t.tabBoard}</button>
+            <button type="button" role="tab" aria-selected={tab === 'settings'} className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>{t.tabSettings}</button>
+          </div>
+        </div>
         <div className="mishu-sources">
           <span><i className={`mishu-dot ${board.sources.github.state}`} />{board.sources.github.text}</span>
+          {board.sources.mail.map(m => <span key={m.id}><i className={`mishu-dot ${m.state}`} />{m.text}</span>)}
           <button type="button" className="mishu-btn" disabled={syncing} onClick={() => { void sync() }}>{syncing ? t.syncing : t.sync}</button>
         </div>
       </div>
+      {tab === 'settings' ? <MishuSettings lang={lang} locale={locale} /> : null}
+      {tab === 'settings' ? null : <>
       {error === undefined ? null : <div className="mishu-error">{t.failed}{error}</div>}
       <p className="mishu-summary">{board.summary}</p>
 
@@ -217,6 +263,14 @@ export function MishuBoard({ locale }: { locale: () => string }) {
           <div className="mishu-metric-label">{t.metricShadow}</div>
           <div className="mishu-metric-value">{metrics.shadow}{board.markRead === 'shadow' ? <small className="mishu-warn">{t.shadowTag}</small> : null}</div>
         </div>
+      </div>
+
+      <div className="mishu-filters" role="group">
+        {sources.map(s => (
+          <button key={s.id} type="button" aria-pressed={source === s.id} className={`mishu-chip ${source === s.id ? 'active' : ''}`} onClick={() => setSource(s.id)}>
+            {s.label}<span>{count(s.id)}</span>
+          </button>
+        ))}
       </div>
 
       <div className="mishu-columns" ref={columnsRef} style={{ ['--mishu-cols' as string]: template }}>
@@ -243,6 +297,7 @@ export function MishuBoard({ locale }: { locale: () => string }) {
           {metrics.shadow > 0 ? <div className="mishu-banner">{t.shadow(metrics.shadow)}</div> : null}
         </section>
       </div>
+      </>}
     </div>
   )
 }

@@ -1,5 +1,17 @@
 # dsh-mishu
 
+[![npm version](https://img.shields.io/npm/v/dsh-mishu?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-mishu)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-mishu?color=cb3837)](https://www.npmjs.com/package/dsh-mishu)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522.18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![DSH plugin](https://img.shields.io/badge/DeepSeek%20Harness-plugin-4d6bfe)](https://github.com/deepseek-ai/deepseek-harness)
+[![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](#)
+[![Languages](https://img.shields.io/badge/lang-%E4%B8%AD%E6%96%87%20%7C%20English-orange)](#)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](tsconfig.json)
+[![No telemetry](https://img.shields.io/badge/telemetry-none-success)](docs/调研与设计.md#用户数据安全)
+
+`提醒` `通知` `待办` `收件箱` `秘书` `GitHub` `邮件` `飞书` `Telegram` · `reminder` `notifications` `todo` `inbox` `triage` `secretary`
+
 [中文](#中文) · [English](#english)
 
 ---
@@ -10,7 +22,7 @@
 
 支持 macOS / Windows / Linux，界面中英双语。设计见 [docs/调研与设计.md](docs/调研与设计.md)，需求全景见 [docs/需求清单.md](docs/需求清单.md)。
 
-### 第一版做什么
+### 能做什么
 
 **GitHub 通知**：每 15 分钟拉一次全部未读通知，**查对象现在的状态**再判断，不看通知文字。
 
@@ -30,15 +42,33 @@
 
 默认提前量：证件 90 天，账单 3 天，生日纪念日 7 天，续费续保 7 天，其他 1 天。
 
+**邮件**：在设置页添加邮箱（QQ、163、126、Gmail、iCloud，或自己填 IMAP 服务器），小秘书定时看收件箱里最近的未读邮件。**只读**：以只读方式打开收件箱，只看发件人、收件人、标题和几个邮件头，不读正文，也不会把邮件标成已读。
+
+| 理由码 | 意思 |
+|---|---|
+| `mail-to-you` | 直接写给你、没有群发或自动发送标记的邮件，可能在等你回复 |
+| `mail-invite` | 会议或日程邀请，等你回应 |
+| `mail-bill` | 标题里有账单、还款、缴费、续费、发票之类的字眼（哪怕是群发的） |
+| `mail-newsletter` / `mail-automated` | 群发邮件、系统自动邮件：折叠起来，不打扰你 |
+| `mail-code` / `mail-github` / `mail-cc` | 验证码、GitHub 通知邮件（GitHub 来源已经在管）、只是抄送你 |
+
+同一封邮件的往来回复算一件事。你在邮件客户端里看过之后，对应的事项会自动关闭。
+
+**密码放在系统钥匙串**：macOS 钥匙串、Windows 凭据管理器、Linux 密钥环（Secret Service）。密码只在设置页输入一次，直接交给钥匙串，不写进任何文件，接口也从不返回它。没有钥匙串的电脑，可以改用环境变量 `DSH_MISHU_SECRET_MAIL_<编号>`。
+
 ### 用法
 
 **看板**：点 DSH 左侧栏的"小秘书"，打开整页看板。顶部是一句话总结和四个数字（要你处理、7 天内到期、今天替你关掉、待你核对），下面分三栏：
+
+看板上方可以按来源筛选：全部、GitHub、邮件、交代。
 
 - **要你处理**：现在需要你的事。每张卡片写明**是什么、问题在哪、怎么办**（比如 CI 失败在哪个 job 的哪一步、上次成功是什么时候），主按钮直接打开该看的地方（"看失败日志""去关掉 Actions""去审查"），还有办完了、明天再说、忽略。
 - **我记着**：说过"明天再说"的事，以及还没到提醒时间的交代。底部可以直接交代新的事，填写时会实时显示小秘书理解成了什么。
 - **替你办了**：最近 7 天关掉的事，按理由分组。点"怎么回事"能看到它是什么、为什么关掉（附证据链接）、小秘书做了什么、来自哪几条通知。判错了就点"恢复"。
 
 卡片可以拖动：拖到"替你办了"就是办完，拖到"我记着"就是明天再提醒，从"我记着"拖回"要你处理"就是现在处理。三栏之间的分隔条也能拖动调宽度，双击恢复等宽。
+
+**设置**：点页面顶部的"设置"：语言、各类别提前几天提醒、GitHub（开关、token 从哪来、测试连接、在 GitHub 上标已读的方式）、邮箱账户（添加、测试连接、现在收一次、编辑、删除）。飞书即将接入。
 
 **文字命令**：
 
@@ -61,6 +91,7 @@ agent 可用的工具：`mishu_add`（交代，需要你审批）、`mishu_list`
 - **通知文字不会触发任何动作。**只看查到的状态。
 - **你改过的状态，不会被同样的证据改回去。**只有来源出现更新的动态，才会重新判断。
 - **你重新打开一件被规则关掉的事，算一次纠正。**一条规则关掉的事项满 10 件、被纠正的比例超过 20%，这条规则就降级：之后它的结论只给你看，不再自动关闭。
+- **不动你的邮箱。**只读打开，不读正文，不标已读，不删不移，不发信。
 
 ### GitHub token
 
@@ -100,7 +131,9 @@ dsh plugin --profile <name> add dsh-mishu
 
 - 推送到手机（渠道还没定）。现在简报只能在 DSH 里看。
 - 规则认不出的通知（`unclassified`）先直接交给你，还没接模型。
-- 邮箱、飞书等其他来源。
+- 飞书；邮件里的"你发出去没人回""你答应别人的事"（要读已发送文件夹）。
+- Outlook / Hotmail：微软只允许 OAuth 登录 IMAP，暂不支持。
+- Windows 和 Linux 的钥匙串已经按各自系统的方式实现，但还没在真机上测过。
 
 ---
 
@@ -110,7 +143,7 @@ dsh plugin --profile <name> add dsh-mishu
 
 Runs on macOS, Windows and Linux. Speaks Chinese and English.
 
-### What version 1 does
+### What it does
 
 **GitHub notifications**: every 15 minutes it pulls all unread notifications and judges each one by **the current state of what it is about**, never by the notification text.
 
@@ -130,15 +163,33 @@ Dozens of notifications fold into a few *items*: all failures of one workflow on
 
 Default warning times: documents 90 days, bills 3, birthdays 7, renewals 7, everything else 1.
 
+**Mail**: add a mailbox on the settings page (QQ, 163, 126, Gmail, iCloud, or your own IMAP server) and the secretary looks at recent unread mail in your inbox. **Read-only**: the inbox is opened read-only; only sender, recipients, subject and a few headers are read — never the body — and nothing is marked read.
+
+| Reason | Meaning |
+|---|---|
+| `mail-to-you` | Written to you directly, with no bulk or automated markers; someone may be waiting |
+| `mail-invite` | A meeting or calendar invitation waiting for your answer |
+| `mail-bill` | The subject mentions a bill, payment, renewal or invoice (even in bulk mail) |
+| `mail-newsletter` / `mail-automated` | Bulk or automated mail, folded away |
+| `mail-code` / `mail-github` / `mail-cc` | Verification codes, GitHub notification mail (the GitHub source has it), mail you are only copied on |
+
+A thread of replies is one item. Once you read it in your mail client, its item closes by itself.
+
+**Passwords live in the system keychain**: the macOS Keychain, Windows Credential Manager or the Linux keyring (Secret Service). You type a password once on the settings page; it goes straight to the keychain, is never written to a file and is never returned by any endpoint. Without a keychain, use the environment variable `DSH_MISHU_SECRET_MAIL_<id>`.
+
 ### Usage
 
 **The board**: click "Secretary" in DSH's left sidebar to open a full-page board. On top: one summary sentence and four numbers (to handle, due in 7 days, closed today, to review). Below, three columns:
+
+Filter the board by source: All, GitHub, Mail, Noted.
 
 - **To handle**: what needs you now. Every card says **what it is, where the problem is and what to do** (for a failing CI: which job and step, when it last passed), and its main button opens the right place ("Open the failing log", "Turn off Actions", "Review it"), next to done, tomorrow and dismiss.
 - **Keeping for you**: things you put off until tomorrow, and things you told it that are not due for a reminder yet. Add a new one at the bottom, with a live preview of what was understood.
 - **Done for you**: what was closed in the last 7 days, grouped by reason. "What happened" shows what it was, why it was closed (with the evidence link), what the secretary did and which notifications it came from. Reopen any that are wrong.
 
 Cards can be dragged: onto "Done for you" to mark done, onto "Keeping for you" to snooze until tomorrow, from "Keeping for you" back to "To handle" to handle it now. The dividers between the columns can be dragged too; double-click one to make the columns equal.
+
+**Settings**: the "Settings" tab at the top of the page: language, warning days per category, GitHub (on/off, where the token comes from, connection test, how to mark read), mail accounts (add, test, check now, edit, delete). Feishu / Lark is coming.
 
 **Text commands**:
 
@@ -161,6 +212,7 @@ Tools for the agent: `mishu_add` (needs your approval), `mishu_list`, `mishu_upd
 - **Notification text never triggers an action.** Only verified state does.
 - **Your own decision is not overturned by the same evidence.** Only newer activity at the source re-opens the question.
 - **Reopening something a rule closed counts as a correction.** A rule that has closed at least 10 items and been corrected on more than 20% of them is demoted: from then on its conclusions are shown to you instead of closing items.
+- **It does not touch your mailbox.** Read-only: no bodies, no marking read, no deleting or moving, no sending.
 
 ### GitHub token
 
@@ -183,7 +235,9 @@ The notebook is `~/.mishu/mishu.db` (SQLite). It keeps metadata and short notes 
 
 - Push to your phone (channels not chosen yet). For now the brief is only in DSH.
 - Notifications the rules do not recognise (`unclassified`) are handed to you; no model triage yet.
-- Other sources such as email and Feishu / Lark.
+- Feishu / Lark; "you sent it and nobody replied" and "things you promised" from mail (needs the Sent folder).
+- Outlook / Hotmail: Microsoft only allows OAuth for IMAP; not supported yet.
+- The Windows and Linux keychains are implemented the way each system documents, but not yet tested on real machines.
 
 ---
 

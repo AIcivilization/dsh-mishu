@@ -8,6 +8,8 @@ import { snoozeByUser } from '../src/core/matters.ts'
 import { MishuStore } from '../src/core/store.ts'
 import { dayOf } from '../src/core/time.ts'
 import { apiHandlers } from '../src/dsh/api.ts'
+import { Runtime } from '../src/dsh/runtime.ts'
+import { MemorySecrets } from '../src/core/secrets.ts'
 import { Config } from '../src/dsh/config.ts'
 import { SYNTHETIC } from './fixtures/synthetic.ts'
 import { at, replayFetch } from './helpers.ts'
@@ -76,7 +78,9 @@ test('a snoozed matter moves to "keeping" and comes back on its day', async () =
 
 test('the API answers with the fresh board and explains failures in the caller\'s language', async () => {
   const store = await seeded()
-  const api = apiHandlers({ store: () => store, config: Config({ language: 'auto' }), fixedLang: undefined, sync: async () => {}, now: () => NOW })
+  const runtime = new Runtime(Config({ language: 'auto', github: { enabled: false } }), { info() {}, warn() {} }, new MemorySecrets(), { unread: async () => [] })
+  runtime.store = store
+  const api = apiHandlers(runtime, () => NOW)
   const first = await api['/board']!({ lang: 'zh-CN' }) as { board: { columns: { handle: Array<{ id: number }> } } }
   const id = first.board.columns.handle[0]!.id
 

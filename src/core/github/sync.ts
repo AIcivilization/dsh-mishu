@@ -7,9 +7,10 @@
  * matter you set by hand stays as you left it until newer activity arrives.
  */
 
-import { bi, encode, type Bi } from '../i18n.ts'
+import { applyVerdict, closeReadElsewhere, mapLimit } from '../fold.ts'
+import { bi, type Bi } from '../i18n.ts'
 import { isDemoted, type DemotionPolicy } from '../matters.ts'
-import type { Matter, MishuStore } from '../store.ts'
+import type { MishuStore } from '../store.ts'
 import type { GitHubClient, Notification } from './client.ts'
 import { gatherFacts, Lookups } from './facts.ts'
 import { CLOSING_REASONS, judge, type Verdict } from './rules.ts'
@@ -42,68 +43,11 @@ export interface GithubSyncReport {
 
 export const SOURCE = 'github'
 
-/** `Promise.all` with at most `limit` in flight, results in input order. */
-async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results = new Array<R>(items.length)
-  let next = 0
-  const worker = async () => {
-    while (next < items.length) {
-      const index = next++
-      results[index] = await fn(items[index]!)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-  return results
-}
-
 /** Fold the verdicts of one matter's messages: open if anything is open; otherwise the newest closing verdict. */
 function combine(verdicts: Array<{ n: Notification; v: Verdict }>): Verdict & { activityAt: number } {
   const sorted = [...verdicts].sort((a, b) => Date.parse(b.n.updated_at) - Date.parse(a.n.updated_at))
   const pick = sorted.find(x => x.v.status === 'open') ?? sorted[0]!
   return { ...pick.v, activityAt: Date.parse(sorted[0]!.n.updated_at) }
-}
-
-function applyVerdict(store: MishuStore, verdict: Verdict & { activityAt: number }, now: number, counts: { opened: number; closed: number }): Matter {
-  const existing = store.matterByKey(verdict.matterKey)
-  if (existing === undefined) {
-    const matter = store.insertMatter({
-      key: verdict.matterKey,
-      source: SOURCE,
-      kind: verdict.kind,
-      title: encode(verdict.title),
-      note: verdict.note === null ? null : encode(verdict.note),
-      explain: JSON.stringify(verdict.explain),
-      url: verdict.url,
-      status: verdict.status,
-      reason: verdict.reason,
-      closedBy: verdict.status === 'done' ? 'rule' : null,
-      activityAt: verdict.activityAt,
-    }, now)
-    if (verdict.status === 'done') {
-      store.bumpRule(verdict.reason, 'fired')
-      counts.closed++
-    } else {
-      counts.opened++
-    }
-    return matter
-  }
-
-  // Your own decision stands until the source shows something newer.
-  const userHeld = existing.overrideAt !== null && verdict.activityAt <= existing.overrideAt
-  const facts = { title: encode(verdict.title), note: verdict.note === null ? null : encode(verdict.note), url: verdict.url ?? existing.url, kind: verdict.kind, activityAt: verdict.activityAt, explain: JSON.stringify(verdict.explain) }
-  if (userHeld) return store.updateMatter(existing.id, { activityAt: verdict.activityAt, explain: facts.explain }, now)
-
-  if (verdict.status === 'open') {
-    if (existing.status !== 'open') counts.opened++
-    // Newer activity than your last decision: back on the list, snooze or not.
-    return store.updateMatter(existing.id, { ...facts, status: 'open', reason: verdict.reason, closedBy: null, closedAt: null, overrideAt: null, snoozeUntil: null }, now)
-  }
-  if (existing.status === 'open') {
-    store.bumpRule(verdict.reason, 'fired')
-    counts.closed++
-    return store.updateMatter(existing.id, { ...facts, status: 'done', reason: verdict.reason, closedBy: 'rule', closedAt: now }, now)
-  }
-  return store.updateMatter(existing.id, facts, now)
 }
 
 export async function syncGithub(options: GithubSyncOptions): Promise<GithubSyncReport> {
@@ -157,7 +101,7 @@ export async function syncGithub(options: GithubSyncOptions): Promise<GithubSync
     const counts = { opened: 0, closed: 0 }
     const seen = new Set<string>()
     for (const [key, items] of byMatter) {
-      const matter = applyVerdict(store, combine(items), now, counts)
+      const matter = applyVerdict(store, SOURCE, combine(items), now, counts)
       for (const { n, v } of items) {
         seen.add(n.id)
         store.upsertMessage({
@@ -181,17 +125,7 @@ export async function syncGithub(options: GithubSyncOptions): Promise<GithubSync
     }
 
     // Threads that left the unread list were read somewhere else (on GitHub, by email).
-    for (const message of store.unreadMessages(SOURCE)) {
-      if (seen.has(message.id)) continue
-      store.setMessageUnread(message.id, false)
-      store.setWouldMarkRead(message.id, false)
-    }
-    for (const matter of store.mattersOfSource(SOURCE)) {
-      if (matter.status !== 'open' || byMatter.has(matter.key)) continue
-      if (store.messagesOfMatter(matter.key).some(m => m.unread)) continue
-      store.updateMatter(matter.id, { status: 'done', reason: 'read-on-github', closedBy: 'source', closedAt: now }, now)
-      counts.closed++
-    }
+    counts.closed += closeReadElsewhere(store, SOURCE, seen, new Set(byMatter.keys()), now, 'read-on-github')
     report.opened = counts.opened
     report.closed = counts.closed
   })

@@ -167,6 +167,11 @@ export class GitHubClient {
     return all
   }
 
+  /** Who the token belongs to, for the settings page's connection test. */
+  user(): Promise<{ login: string }> {
+    return this.get('/user')
+  }
+
   repo(fullName: string): Promise<RepoInfo> {
     return this.get(`/repos/${fullName}`)
   }

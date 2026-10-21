@@ -39,3 +39,59 @@ export const mishuApi = {
   preview: (lang: string, item: NewItem) => post<{ text: string }>('/preview', { lang, item }),
   add: (lang: string, item: NewItem) => post<{ id: number; board: BoardData }>('/add', { lang, item }),
 }
+
+export interface AccountView {
+  id: number
+  label: string
+  address: string
+  preset: string
+  host: string
+  port: number
+  secure: boolean
+  user: string
+  enabled: boolean
+  sinceDays: number
+  hasPassword: boolean
+  envName: string
+  report: { at: number; messages: number; opened: number; closed: number; error?: { zh: string; en: string } } | null
+}
+
+export interface PresetView {
+  id: string
+  label: string
+  host: string
+  port: number
+  secure: boolean
+  supported: boolean
+  howTo: string
+}
+
+export interface SettingsView {
+  lang: 'zh' | 'en'
+  settings: {
+    language: 'auto' | 'zh' | 'en'
+    githubEnabled: boolean
+    markRead: 'off' | 'shadow' | 'on'
+    leadDays: Record<string, number>
+  }
+  github: {
+    tokenEnv: string
+    token: { found: true; from: 'env' | 'gh' } | { found: false; text: string }
+    lastSync: { at: number; notifications: number; error?: { zh: string; en: string } } | null
+  }
+  secrets: { kind: string; available: boolean }
+  accounts: AccountView[]
+  presets: PresetView[]
+}
+
+export type AccountDraft = Partial<Omit<AccountView, 'hasPassword' | 'envName' | 'report'>>
+
+export const settingsApi = {
+  load: (lang: string) => post<{ view: SettingsView }>('/settings', { lang }),
+  save: (lang: string, settings: Partial<SettingsView['settings']>) => post<{ view: SettingsView }>('/settings/save', { lang, settings }),
+  testGithub: (lang: string) => post<{ login: string; from: string }>('/github/test', { lang }),
+  saveMail: (lang: string, account: AccountDraft, password: string) => post<{ id: number; view: SettingsView }>('/mail/save', { lang, account, password }),
+  testMail: (lang: string, account: AccountDraft, password: string) => post<{ unread: number }>('/mail/test', { lang, account, password }),
+  deleteMail: (lang: string, id: number) => post<{ view: SettingsView }>('/mail/delete', { lang, id }),
+  syncMail: (lang: string, id: number) => post<{ view: SettingsView }>('/mail/sync', { lang, id }),
+}
