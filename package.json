@@ -1,0 +1,70 @@
+{
+  "name": "dsh-mishu",
+  "version": "0.3.0",
+  "description": "DSH secretary (小秘书) for DeepSeek Harness (dsh): watches GitHub notifications and the dated things you tell it (bills, renewals, documents, birthdays), closes what is already resolved, and keeps a short list of what actually needs you. Bilingual (中文 / English), macOS / Windows / Linux. · DSH 小秘书：提醒、通知、待办、消息、收件箱、秘书。GitHub 通知按当前状态分诊，交代一句就记下到期和周期事项。",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "license": "MIT",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "notifications",
+    "inbox",
+    "triage",
+    "reminder",
+    "todo",
+    "github",
+    "email",
+    "feishu",
+    "lark",
+    "telegram",
+    "secretary"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AIcivilization/dsh-mishu.git"
+  },
+  "homepage": "https://github.com/AIcivilization/dsh-mishu#readme",
+  "author": "AIcivilization",
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json",
+    "test": "node --test --import ./tests/setup.ts --disable-warning=ExperimentalWarning \"tests/*.test.ts\"",
+    "record": "node --disable-warning=ExperimentalWarning scripts/record-github.ts",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5",
+    "@deepseek-ai/schemastery": "^3.18.5",
+    "@types/node": "^24.0.0",
+    "@types/react": "^18.3.31",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js"
+  }
+}

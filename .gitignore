@@ -1,0 +1,12 @@
+node_modules/
+lib/
+*.tgz
+*.tsbuildinfo
+.DS_Store
+
+# Real recordings of someone's own GitHub account (repo names, titles, commit
+# authors). They stay on that machine and never enter the repository.
+tests/fixtures/local/
+
+# Local dev-server launch config for the Claude app.
+.claude/

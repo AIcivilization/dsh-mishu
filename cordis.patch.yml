@@ -1,0 +1,5 @@
+# dsh bundle patch: inserts dsh-mishu into a profile's layer stack.
+# Override any field (home, github.*, leadDays.*) in your profile's cordis.patch.yml.
+- insert:
+    - id: dsh-mishu
+      name: dsh-mishu
