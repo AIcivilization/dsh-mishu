@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { mishuApi, type BoardCard, type BoardData, type CardAction, type MatterDetail, type NewItem } from './api.ts'
+import { mishuApi, restartApi, type BoardCard, type BoardData, type CardAction, type MatterDetail, type NewItem } from './api.ts'
 import { AskAI, type OpenChat } from './AskAI.tsx'
 import { MishuSettings } from './Settings.tsx'
 import { TEXT, uiLang, type UiLang } from './text.ts'
@@ -198,7 +198,7 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
   if (board === undefined) {
     return (
       <div className="mishu-page">
-        <div className="mishu-head"><h1>{t.title}</h1></div>
+        <div className="mishu-head"><div className="mishu-title"><h1>{t.title}</h1><RestartButton lang={lang} locale={locale} /></div></div>
         {error === undefined ? <p className="mishu-empty">{t.loading}</p> : <div className="mishu-error">{t.failed}{error}</div>}
       </div>
     )
@@ -242,6 +242,7 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
             <button type="button" role="tab" aria-selected={tab === 'board'} className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>{t.tabBoard}</button>
             <button type="button" role="tab" aria-selected={tab === 'settings'} className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>{t.tabSettings}</button>
           </div>
+          <RestartButton lang={lang} locale={locale} />
         </div>
         <div className="mishu-sources">
           <span>
@@ -482,5 +483,31 @@ function AddForm({ lang, locale, onAdded }: { lang: UiLang; locale: () => string
       </div>
       <p className="mishu-hint">{t.chatHint}</p>
     </div>
+  )
+}
+
+/** "Restart DSH", for after plugins were reinstalled or upgraded. Where it cannot work (DSH started from a terminal) it says what to do instead. */
+function RestartButton({ lang, locale }: { lang: UiLang; locale: () => string }) {
+  const t = TEXT[lang]
+  const [why, setWhy] = useState<string | undefined>()
+  const [status, setStatus] = useState<{ ok: boolean; text: string } | undefined>()
+  useEffect(() => {
+    void restartApi.info(locale()).then((r) => { if (r.ok && !r.supported) setWhy(r.why) })
+  }, [locale])
+  const restart = async () => {
+    if (why !== undefined) {
+      setStatus({ ok: false, text: why })
+      return
+    }
+    if (!window.confirm(t.restartConfirm)) return
+    setStatus({ ok: true, text: t.restarting })
+    const r = await restartApi.restart(locale())
+    if (!r.ok) setStatus({ ok: false, text: r.message })
+  }
+  return (
+    <>
+      <button type="button" className="mishu-btn" title={why === undefined ? t.restartTip : `${t.restartTip}\n${why}`} disabled={status?.ok === true} onClick={() => { void restart() }}>{t.restart}</button>
+      {status === undefined ? null : <span className={status.ok ? 'mishu-hint' : 'mishu-hint mishu-warn'}>{status.text}</span>}
+    </>
   )
 }

@@ -29,6 +29,7 @@ export { ImapFetcher } from './mail/imap.ts'
 export { judgeMail } from './mail/rules.ts'
 export { describeMailError, MAIL_SOURCE, mailReportKey, syncMail, type MailSyncReport } from './mail/sync.ts'
 export { findProgram } from './exec.ts'
+export { restartPlan, scheduleRestart, type RestartPlan } from './restart.ts'
 export { MemorySecrets, secretEnvName, secretFromEnv, systemSecrets, type SecretStatus, type SecretStore } from './secrets.ts'
 export { deleteMailAccount, effectiveSettings, mailAccounts, saveMailAccount, saveSettings, type Defaults, type UserSettings } from './settings.ts'
 

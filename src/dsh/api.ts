@@ -253,6 +253,19 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       return { view: await settingsView(lang) }
     },
 
+    /** Whether the page's "restart DSH" button can work here, and if not, what to do instead. */
+    '/restart/info': async (body) => {
+      const plan = runtime.restarter.plan()
+      return plan.kind === 'none' ? { supported: false, why: plan.why[langOf(body)] } : { supported: true }
+    },
+
+    '/restart': async (body) => {
+      const plan = runtime.restarter.plan()
+      if (plan.kind === 'none') throw new ApiError(plan.why[langOf(body)])
+      const { log } = runtime.restarter.schedule(plan)
+      return { restarting: true, log }
+    },
+
     '/mail/sync': async (body) => {
       const lang = langOf(body)
       const account = runtime.accounts().find(a => a.id === Number(body.id))

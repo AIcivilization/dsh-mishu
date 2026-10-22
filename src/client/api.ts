@@ -97,6 +97,11 @@ export interface SettingsView {
 
 export type AccountDraft = Partial<Omit<AccountView, 'hasPassword' | 'envName' | 'report'>>
 
+export const restartApi = {
+  info: (lang: string) => post<{ supported: true } | { supported: false; why: string }>('/restart/info', { lang }),
+  restart: (lang: string) => post<{ restarting: true }>('/restart', { lang }),
+}
+
 export const settingsApi = {
   load: (lang: string) => post<{ view: SettingsView }>('/settings', { lang }),
   save: (lang: string, settings: Partial<SettingsView['settings']>) => post<{ view: SettingsView }>('/settings/save', { lang, settings }),

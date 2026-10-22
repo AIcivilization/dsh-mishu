@@ -72,6 +72,8 @@
 
 **设置**：点页面顶部的"设置"：语言、各类别提前几天提醒、GitHub（开关、token 从哪来、测试连接、在 GitHub 上标已读的方式）、邮箱账户（添加、测试连接、现在收一次、编辑、删除）。飞书即将接入。
 
+**重启 DSH**：页面顶部"设置"后面的按键。重装或升级插件后点它，桌面版会按正常方式退出（有任务在跑时会先问你），再自动打开。用 `dsh` 命令启动的 DSH 没法从页面重启（新的登录地址只会打印在那个终端里），按键会告诉你回终端按 Ctrl+C 再运行一次。Windows 和 Linux 桌面版的重启还没在真机上测过。
+
 **文字命令**：
 
 ```
@@ -195,6 +197,8 @@ Filter the board by source: All, GitHub, Mail, Noted.
 Cards can be dragged: onto "Done for you" to mark done, onto "Keeping for you" to snooze until tomorrow, from "Keeping for you" back to "To handle" to handle it now. The dividers between the columns can be dragged too; double-click one to make the columns equal.
 
 **Settings**: the "Settings" tab at the top of the page: language, warning days per category, GitHub (on/off, where the token comes from, connection test, how to mark read), mail accounts (add, test, check now, edit, delete). Feishu / Lark is coming.
+
+**Restart DSH**: the button after "Settings" at the top of the page. After reinstalling or upgrading plugins, click it: the desktop app quits the normal way (asking first if a task is running) and opens again. DSH started with the `dsh` command cannot be restarted from the page (its new sign-in address is printed only in that terminal), so the button tells you to press Ctrl+C there and run it again. Restarting the Windows and Linux desktop apps is not yet tested on real machines.
 
 **Text commands**:
 

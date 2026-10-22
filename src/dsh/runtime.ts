@@ -9,7 +9,7 @@ import {
   dayOf, detectLang, effectiveSettings, GitHubClient, ImapFetcher, mailAccounts, mailReportKey, renderBrief,
   resolveGithubToken, secretAccount, secretFromEnv, syncGithub, syncMail, systemSecrets, tickManual, bi,
   type Defaults, type GithubSyncReport, type Lang, type MailAccount, type MailFetcher, type MailSyncReport, type MishuStore,
-  type SecretStore, type TokenResult,
+  restartPlan, scheduleRestart, type RestartPlan, type SecretStore, type TokenResult,
 } from '../core/index.ts'
 import type { MishuConfig } from './config.ts'
 
@@ -22,6 +22,8 @@ export class Runtime {
   readonly fetcher: MailFetcher
   private readonly logger: Logger
   private syncing: Promise<void> | undefined
+  /** How DSH restarts; tests swap it so they never restart anything. */
+  restarter: { plan(): RestartPlan; schedule(plan: Exclude<RestartPlan, { kind: 'none' }>): { log: string } } = { plan: () => restartPlan(), schedule: scheduleRestart }
 
   constructor(config: MishuConfig, logger: Logger, secrets: SecretStore = systemSecrets(), fetcher: MailFetcher = new ImapFetcher()) {
     this.config = config
