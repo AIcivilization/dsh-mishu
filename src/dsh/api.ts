@@ -116,7 +116,8 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       accounts,
       presets: MAIL_PRESETS.map(p => ({
         id: p.id, label: p.label[lang], host: p.host, port: p.port, secure: p.secure, supported: p.supported, howTo: p.howTo[lang],
-        domains: p.domains, setupUrl: p.setupUrl ?? null, passwordLength: p.passwordLength ?? null,
+        domains: p.domains, passwordLength: p.passwordLength ?? null,
+        steps: p.steps.map(step => ({ text: step.text[lang], ...step.link === undefined ? {} : { link: { url: step.link.url, label: step.link.label[lang] } } })),
       })),
     }
   }
@@ -266,7 +267,8 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
         const messages = await runtime.fetcher.unread(draft, secret, draft.sinceDays, clock())
         return { unread: messages.length }
       } catch (error) {
-        throw new MishuError(describeMailError(error, draft))
+        // The dialog shows the provider's steps already; the error only says what went wrong.
+        throw new MishuError(describeMailError(error, draft, { steps: false }))
       }
     },
 

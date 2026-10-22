@@ -83,7 +83,11 @@ export const STYLES = `
 .mishu-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .mishu-modal-head h2{font-size:15px;font-weight:600;margin:0}
 .mishu-steps{font-size:12px;color:${MUTED};background:${LAYER1};border-radius:8px;padding:8px 10px;margin:2px 0 10px;line-height:1.6}
-.mishu-steps .mishu-actions{margin-top:6px}
+.mishu-steps ol{margin:0;padding-left:20px}
+.mishu-steps li{margin:2px 0 6px}
+.mishu-steps li .mishu-btn{margin-left:4px;vertical-align:baseline}
+.mishu-steps.attention{outline:2px solid ${ACCENT};outline-offset:1px;color:${TEXT}}
+.mishu-steps-help{display:flex;align-items:center;gap:6px;margin-top:4px}
 .mishu-steps.mishu-danger{color:${DANGER}}
 .mishu-more{margin:4px 0 8px;font-size:12px;color:${MUTED}}
 .mishu-more summary{cursor:pointer;margin-bottom:6px}

@@ -85,8 +85,8 @@ test('a rejected login explains app passwords; nothing is half-written', async (
   const store = MishuStore.open(':memory:')
   const failing: MailFetcher = { unread: async () => { throw Object.assign(new Error('Command failed'), { responseText: 'Invalid credentials (Failure)' }) } }
   const report = await syncMail({ store, account: ACCOUNT, fetcher: failing, password: 'wrong', now: MAIL_NOW })
-  assert.match(report.error!.zh, /^登录失败：服务器不接受这个用户名或密码（Invalid credentials \(Failure\)）。多数邮箱要先开启 IMAP，再填客户端授权码或应用专用密码/)
-  assert.match(report.error!.zh, /\nGmail：Google 账号先开启两步验证/, 'says where this provider\'s app password comes from')
+  assert.match(report.error!.zh, /^Google 不认这个应用专用密码：可能抄错了.*（服务器原话：Invalid credentials \(Failure\)）/)
+  assert.match(report.error!.zh, /\nGmail：1\. 开启 Google 账号的两步验证.* 2\. 打开「应用专用密码」页面/, 'says where this provider\'s app password comes from')
   assert.equal(store.openMatters().length, 0)
   const unreachable: MailFetcher = { unread: async () => { throw new Error('getaddrinfo ENOTFOUND imap.gmail.com') } }
   assert.match((await syncMail({ store, account: ACCOUNT, fetcher: unreachable, password: 'p', now: MAIL_NOW })).error!.en, /^Could not reach imap\.gmail\.com:993/)
@@ -212,4 +212,30 @@ test('the address picks the provider; app passwords lose their spaces; a mismatc
   const secrets = new MemorySecrets()
   await saveMailAccount(store, secrets, { preset: 'gmail', address: 'me@gmail.com' }, 'abcd efgh ijkl mnop', MAIL_NOW)
   assert.equal(await secrets.get('mail:1'), 'abcdefghijklmnop')
+})
+
+test('known refusals are said plainly, and the dialog does not repeat the steps it shows', async () => {
+  const { describeMailError } = await import('../src/core/mail/sync.ts')
+  const refused = (text: string) => Object.assign(new Error('Command failed'), { responseText: text })
+  const gmail = { host: 'imap.gmail.com', port: 993, preset: 'gmail' }
+  const appPassword = describeMailError(refused('Application-specific password required: https://support.google.com/accounts/answer/185833 (Failure)'), gmail, { steps: false })
+  assert.equal(appPassword.zh, 'Google 不接受账号的登录密码：这里要填「应用专用密码」（16 位）。按步骤第 1、2 步生成一个，大约一分钟。（服务器原话：Application-specific password required: https://support.google.com/accounts/answer/185833 (Failure)）')
+
+  const qq = describeMailError(refused('Login fail. Account is abnormal, service is not open, password is incorrect, login frequency limited, or system is busy.'), { host: 'imap.qq.com', port: 993, preset: 'qq' })
+  assert.match(qq.zh, /^QQ 邮箱不让登录：最常见是还没开启 IMAP 服务/)
+  assert.match(qq.zh, /\nQQ 邮箱：1\. 打开 QQ 邮箱网页版并登录。 2\. 点「设置」/, 'outside the dialog the steps come along')
+
+  const other = describeMailError(refused('AUTHENTICATIONFAILED'), { host: 'mail.example.com', port: 993, preset: 'custom' })
+  assert.equal(other.zh, '登录失败：服务器不接受这个用户名或密码。多数邮箱要先开启 IMAP，再填客户端授权码或应用专用密码，不是网页登录密码。（服务器原话：AUTHENTICATIONFAILED）')
+})
+
+test('every provider we support says where its password comes from, step by step', async () => {
+  const { MAIL_PRESETS } = await import('../src/core/mail/account.ts')
+  for (const preset of MAIL_PRESETS.filter(p => p.supported && p.id !== 'custom')) {
+    assert.ok(preset.steps.length >= 3, `${preset.id} has steps`)
+    assert.ok(preset.steps[0]!.link !== undefined, `${preset.id} opens the right page first`)
+    assert.ok(preset.howTo.zh.startsWith('1. '), `${preset.id} gives the same steps as text`)
+  }
+  const gmail = MAIL_PRESETS.find(p => p.id === 'gmail')!
+  assert.deepEqual(gmail.steps.map(s => s.link?.url), ['https://myaccount.google.com/signinoptions/twosv', 'https://myaccount.google.com/apppasswords', undefined])
 })

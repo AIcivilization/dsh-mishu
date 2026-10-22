@@ -8,6 +8,12 @@
 
 import { bi, MishuError, type Bi } from '../i18n.ts'
 
+/** One step of getting a provider's app password, with the page it happens on. */
+export interface MailStep {
+  text: Bi
+  link?: { url: string; label: Bi }
+}
+
 export interface MailPreset {
   id: string
   label: Bi
@@ -16,56 +22,83 @@ export interface MailPreset {
   secure: boolean
   /** False when the provider no longer allows password logins over IMAP. */
   supported: boolean
-  /** Where to get the password this provider expects. */
+  /** Numbered steps to the password this provider expects, each with its page to open. */
+  steps: MailStep[]
+  /** The same as one paragraph, for error messages and "+AI"; a short note where there are no steps. */
   howTo: Bi
   /** Address domains that belong to this provider, for picking it from the address. */
   domains: string[]
-  /** The page where that password is made, when there is one to open. */
-  setupUrl?: string
   /** Length of the app password or code, when the provider fixes it (spaces aside). */
   passwordLength?: number
   /** A web link that finds one message by Message-ID, when the provider has one. */
   findMessage?: (messageId: string) => string
 }
 
+/** Steps, and the same steps as one numbered paragraph. */
+function guide(steps: MailStep[]): Pick<MailPreset, 'steps' | 'howTo'> {
+  return {
+    steps,
+    howTo: bi(steps.map((step, i) => `${i + 1}. ${step.text.zh}`).join(' '), steps.map((step, i) => `${i + 1}. ${step.text.en}`).join(' ')),
+  }
+}
+
+const NETEASE = (name: string, url: string) => guide([
+  { text: bi(`打开 ${name} 邮箱网页版并登录。`, `Open ${name} Mail on the web and sign in.`), link: { url, label: bi(`打开 ${name} 邮箱`, `Open ${name} Mail`) } },
+  { text: bi('点上方的「设置」→「POP3/SMTP/IMAP」，开启「IMAP/SMTP 服务」。', 'Click Settings → POP3/SMTP/IMAP at the top and turn on "IMAP/SMTP".') },
+  { text: bi('按提示用手机验证，页面会给你一个「客户端授权码」，复制后粘贴到下面的密码框（不是邮箱登录密码）。', 'Verify with your phone as asked; the page shows a client authorization code. Copy it into the password box below (not your mail password).') },
+])
+
 export const MAIL_PRESETS: readonly MailPreset[] = [
   {
     id: 'qq', label: bi('QQ 邮箱', 'QQ Mail'), host: 'imap.qq.com', port: 993, secure: true, supported: true,
-    domains: ['qq.com', 'vip.qq.com', 'foxmail.com'], setupUrl: 'https://mail.qq.com/', passwordLength: 16,
-    howTo: bi(
-      '在 QQ 邮箱网页版：设置 → 账号与安全 → 安全设置（旧版界面是 设置 → 账户），开启「IMAP/SMTP 服务」，按提示验证后生成 16 位授权码。这里填授权码，不是 QQ 密码；改过 QQ 密码后，旧授权码会失效。',
-      'In QQ Mail on the web: Settings → Account and Security → Security (Settings → Account in the older layout), turn on "IMAP/SMTP", verify, and generate a 16-character authorization code. Enter that code here, not your QQ password; changing your QQ password expires old codes.',
-    ),
+    domains: ['qq.com', 'vip.qq.com', 'foxmail.com'], passwordLength: 16,
+    ...guide([
+      { text: bi('打开 QQ 邮箱网页版并登录。', 'Open QQ Mail on the web and sign in.'), link: { url: 'https://mail.qq.com/', label: bi('打开 QQ 邮箱', 'Open QQ Mail') } },
+      { text: bi('点「设置」→「账号与安全」→「安全设置」（旧版界面是「设置」→「账户」），找到「IMAP/SMTP 服务」，点「开启」。', 'Click Settings → Account and Security → Security (Settings → Account in the older layout), find "IMAP/SMTP" and turn it on.') },
+      { text: bi('按提示用手机验证，页面会显示一个 16 位授权码，复制后粘贴到下面的密码框（不是 QQ 密码）。改过 QQ 密码后，旧授权码会失效。', 'Verify with your phone as asked; the page shows a 16-character authorization code. Copy it into the password box below (not your QQ password). Changing your QQ password expires old codes.') },
+    ]),
   },
   {
     id: '163', label: bi('网易 163 邮箱', 'NetEase 163'), host: 'imap.163.com', port: 993, secure: true, supported: true,
-    domains: ['163.com'], setupUrl: 'https://mail.163.com/',
-    howTo: bi('在 163 邮箱网页版：设置 → POP3/SMTP/IMAP → 开启 IMAP 服务，设置客户端授权码。这里填授权码。', 'In 163 Mail on the web: Settings → POP3/SMTP/IMAP → turn on IMAP and set a client authorization code. Enter that code here.'),
+    domains: ['163.com'], ...NETEASE('163', 'https://mail.163.com/'),
   },
   {
     id: '126', label: bi('网易 126 邮箱', 'NetEase 126'), host: 'imap.126.com', port: 993, secure: true, supported: true,
-    domains: ['126.com'], setupUrl: 'https://mail.126.com/',
-    howTo: bi('在 126 邮箱网页版：设置 → POP3/SMTP/IMAP → 开启 IMAP 服务，设置客户端授权码。这里填授权码。', 'In 126 Mail on the web: Settings → POP3/SMTP/IMAP → turn on IMAP and set a client authorization code. Enter that code here.'),
+    domains: ['126.com'], ...NETEASE('126', 'https://mail.126.com/'),
   },
   {
     id: 'gmail', label: bi('Gmail', 'Gmail'), host: 'imap.gmail.com', port: 993, secure: true, supported: true,
-    domains: ['gmail.com', 'googlemail.com'], setupUrl: 'https://myaccount.google.com/apppasswords', passwordLength: 16,
-    howTo: bi('Google 账号先开启两步验证，再到「安全性 → 应用专用密码」生成一个 16 位密码，填在这里。', 'Turn on 2-Step Verification for your Google account, then create an app password under Security → App passwords and enter it here.'),
+    domains: ['gmail.com', 'googlemail.com'], passwordLength: 16,
+    ...guide([
+      {
+        text: bi('开启 Google 账号的两步验证（已经开了就跳过这步）。', 'Turn on 2-Step Verification for your Google account (skip this if it is on).'),
+        link: { url: 'https://myaccount.google.com/signinoptions/twosv', label: bi('打开两步验证', 'Open 2-Step Verification') },
+      },
+      {
+        text: bi('打开「应用专用密码」页面，名字随便填（比如"小秘书"），点「创建」。如果页面说"设置不可用"，说明第 1 步还没做。', 'Open the App passwords page, type any name ("secretary") and click Create. If the page says the setting is not available, step 1 is not done yet.'),
+        link: { url: 'https://myaccount.google.com/apppasswords', label: bi('打开应用专用密码', 'Open App passwords') },
+      },
+      { text: bi('把弹出来的 16 位密码复制，粘贴到下面的密码框（带不带空格都行）。它只显示这一次。', 'Copy the 16-character password it shows into the password box below (spaces or not). It is shown only once.') },
+    ]),
     findMessage: id => `https://mail.google.com/mail/u/0/#search/rfc822msgid:${encodeURIComponent(id)}`,
   },
   {
     id: 'icloud', label: bi('iCloud 邮件', 'iCloud Mail'), host: 'imap.mail.me.com', port: 993, secure: true, supported: true,
-    domains: ['icloud.com', 'me.com', 'mac.com'], setupUrl: 'https://account.apple.com/account/manage',
-    howTo: bi('在 appleid.apple.com：登录与安全 → App 专用密码，生成一个填在这里。用户名一般是 @icloud.com 前面的部分。', 'At appleid.apple.com: Sign-In and Security → App-Specific Passwords; create one and enter it here. The user name is usually the part before @icloud.com.'),
+    domains: ['icloud.com', 'me.com', 'mac.com'],
+    ...guide([
+      { text: bi('打开 Apple 账户页面并登录。', 'Open your Apple Account page and sign in.'), link: { url: 'https://account.apple.com/account/manage', label: bi('打开 Apple 账户', 'Open Apple Account') } },
+      { text: bi('点「登录与安全」→「App 专用密码」，点「+」，名字随便填。', 'Click Sign-In and Security → App-Specific Passwords, click +, and type any name.') },
+      { text: bi('把显示的密码（xxxx-xxxx-xxxx-xxxx）复制，粘贴到下面的密码框。', 'Copy the password it shows (xxxx-xxxx-xxxx-xxxx) into the password box below.') },
+    ]),
   },
   {
     id: 'outlook', label: bi('Outlook / Hotmail', 'Outlook / Hotmail'), host: 'outlook.office365.com', port: 993, secure: true, supported: false,
-    domains: ['outlook.com', 'hotmail.com', 'live.com', 'msn.com'],
+    domains: ['outlook.com', 'hotmail.com', 'live.com', 'msn.com'], steps: [],
     howTo: bi('微软已经不允许用密码登录 IMAP，需要 OAuth 授权，小秘书暂时还不支持。', 'Microsoft no longer allows password logins over IMAP; it needs OAuth, which the secretary does not support yet.'),
   },
   {
     id: 'custom', label: bi('其他（自己填服务器）', 'Other (enter the server)'), host: '', port: 993, secure: true, supported: true,
-    domains: [],
+    domains: [], steps: [],
     howTo: bi('填你的邮件服务商给的 IMAP 服务器、端口和密码（很多服务商要求用专门的客户端授权码）。', 'Enter the IMAP server, port and password your provider gives you (many require a separate app password).'),
   },
 ]

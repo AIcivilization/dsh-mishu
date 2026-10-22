@@ -77,7 +77,7 @@ export interface PresetView {
   supported: boolean
   howTo: string
   domains: string[]
-  setupUrl: string | null
+  steps: Array<{ text: string; link?: { url: string; label: string } }>
   passwordLength: number | null
 }
 

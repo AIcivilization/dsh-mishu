@@ -389,11 +389,21 @@ function MailDialog({ draft, view, lang, locale, openChat, onDone }: {
           {view.presets.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
       </label>
-      <div className={preset.supported ? 'mishu-steps' : 'mishu-steps mishu-danger'}>
-        {preset.howTo}
+      {/* After a failed test the steps light up: that is where the fix is. */}
+      <div className={`mishu-steps${preset.supported ? '' : ' mishu-danger'}${failedTest ? ' attention' : ''}`}>
+        {preset.steps.length === 0 ? preset.howTo : (
+          <ol>
+            {preset.steps.map((step, i) => (
+              <li key={i}>
+                {step.text}
+                {step.link === undefined ? null : <> <button type="button" className="mishu-btn" onClick={() => window.open(step.link!.url, '_blank', 'noopener')}>{step.link.label}</button></>}
+              </li>
+            ))}
+          </ol>
+        )}
         {preset.supported ? (
-          <div className="mishu-actions">
-            {preset.setupUrl === null ? null : <button type="button" className="mishu-btn" onClick={() => window.open(preset.setupUrl!, '_blank', 'noopener')}>{t.mOpenSetup}</button>}
+          <div className="mishu-steps-help">
+            {t.mStepsHelp}
             <AskAI topic={{ kind: 'mail-setup', preset: preset.id }} lang={lang} locale={locale} openChat={openChat} compact />
           </div>
         ) : null}
