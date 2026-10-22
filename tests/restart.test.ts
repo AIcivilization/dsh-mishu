@@ -32,8 +32,8 @@ test('the desktop app restarts by quitting and reopening; DSH from a terminal sa
 
   const mac = restartHelperSource({ kind: 'macos-app', bundleId: 'com.example.harness', appPid: 4242 }, '/tmp/x.log')
   new Script(mac)
-  assert.match(mac, /osascript', \['-e', "tell application id \\"com\.example\.harness\\" to quit"\]/)
-  assert.match(mac, /\/usr\/bin\/open', \['-b', "com\.example\.harness"\]/)
+  assert.ok(mac.includes(`spawnSync("/usr/bin/osascript", ['-e', "tell application id \\"com.example.harness\\" to quit"]`))
+  assert.ok(mac.includes(`spawnSync("/usr/bin/open", ['-b', "com.example.harness"], { env: clean`))
   new Script(restartHelperSource({ kind: 'desktop-app', platform: 'win32', exe: 'C:\\App\\Harness.exe', appPid: 4242 }, 'C:\\x.log'))
 })
 
@@ -55,7 +55,29 @@ test('the helper waits for the app to quit, then opens it again', { skip: proces
   for (let i = 0; i < 20 && !existsSync(marker); i++) await new Promise(res => setTimeout(res, 100))
   assert.equal(running(), false, 'the app was asked to quit')
   assert.equal(readFileSync(marker, 'utf8'), '\n', 'reopened, and not as Node')
-  assert.match(readFileSync(log, 'utf8'), /asking the app \(pid \d+\) to quit\n.*the app has quit; opening it again/)
+  assert.match(readFileSync(log, 'utf8'), /asking the app \(pid \d+\) to quit\n.*opening the app \(attempt 1\)\n.*the app is running again/)
+})
+
+test('on macOS the helper quits, reopens without ELECTRON_RUN_AS_NODE, and checks the app is back', { skip: process.platform === 'win32' ? 'uses sleep and shell scripts' : false }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mishu-restart-mac-'))
+  const appPid = Number(spawnSync('/bin/sh', ['-c', 'sleep 60 >/dev/null 2>&1 & echo $!']).stdout.toString().trim())
+  const opened = join(dir, 'opened')
+  const script = (name: string, body: string) => {
+    const path = join(dir, name)
+    writeFileSync(path, `#!/bin/sh\n${body}\n`)
+    chmodSync(path, 0o755)
+    return path
+  }
+  // Stand-ins: "quit" stops the fake app; "is running" answers from what open left behind.
+  const osascript = script('osascript', `case "$2" in *"to quit") kill ${appPid} ;; *"is running") [ -f ${JSON.stringify(opened)} ] && echo true || echo false ;; esac`)
+  const open = script('open', `echo "run-as-node=[$ELECTRON_RUN_AS_NODE] $*" > ${JSON.stringify(opened)}`)
+  const log = join(dir, 'restart.log')
+  const r = spawnSync(process.execPath, ['-e', restartHelperSource({ kind: 'macos-app', bundleId: 'com.example.harness', appPid }, log, { osascript, open })], {
+    timeout: 30_000, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+  })
+  assert.equal(r.status, 0, String(r.stderr))
+  assert.equal(readFileSync(opened, 'utf8'), 'run-as-node=[] -b com.example.harness\n', 'the app is opened as an app, not as Node')
+  assert.match(readFileSync(log, 'utf8'), /asking the app \(pid \d+\) to quit\n.*opening the app \(attempt 1\)\n.*open exited 0\n.*the app is running again\n$/)
 })
 
 test('the API restarts only where it can, and says why elsewhere', async () => {

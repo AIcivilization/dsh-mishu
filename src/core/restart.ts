@@ -102,28 +102,47 @@ export function restartPlan(facts: ProcessFacts = here()): RestartPlan {
   return { kind: 'none', why: bi('这个系统上没法替桌面版重启。请退出 DSH 再打开。', 'The desktop app cannot be restarted from here on this system. Quit DSH and open it again.') }
 }
 
+/** The programs the macOS helper runs; tests point them at stand-ins. */
+export interface MacTools { osascript: string; open: string }
+const MAC_TOOLS: MacTools = { osascript: '/usr/bin/osascript', open: '/usr/bin/open' }
+
 /**
  * Source of the detached helper: ask the app to quit, wait until it is gone
- * (giving up quietly when you cancel the quit), open it again. Every step is
- * noted in `log`, the only account of a restart once this process is gone.
+ * (giving up quietly when you cancel the quit), open it again, and check it
+ * came back. Every step is noted in `log`, the only account of a restart
+ * once this process is gone.
+ *
+ * The helper itself runs as Node (`ELECTRON_RUN_AS_NODE=1`), and whatever it
+ * launches inherits its environment — `open` included ("Opened applications
+ * inherit environment variables", open(1)). So the app is always started
+ * without that variable; with it, the app starts as bare Node and exits.
  */
-export function restartHelperSource(plan: Exclude<RestartPlan, { kind: 'none' }>, log: string): string {
-  const quit = plan.kind === 'macos-app'
-    ? `spawnSync('/usr/bin/osascript', ['-e', ${JSON.stringify(`tell application id "${plan.bundleId}" to quit`)}], { timeout: 180000 })`
+export function restartHelperSource(plan: Exclude<RestartPlan, { kind: 'none' }>, log: string, tools: MacTools = MAC_TOOLS): string {
+  const mac = plan.kind === 'macos-app'
+  const app = mac ? `application id ${JSON.stringify(plan.bundleId)}` : ''
+  const quit = mac
+    ? `spawnSync(${JSON.stringify(tools.osascript)}, ['-e', ${JSON.stringify(`tell ${app} to quit`)}], { timeout: 180000 })`
     : plan.platform === 'win32'
       ? `spawnSync('taskkill', ['/PID', String(pid)], { windowsHide: true })`
       : `process.kill(pid, 'SIGTERM')`
-  const open = plan.kind === 'macos-app'
-    ? `spawnSync('/usr/bin/open', ['-b', ${JSON.stringify(plan.bundleId)}])`
-    : `spawn(${JSON.stringify(plan.exe)}, [], { detached: true, stdio: 'ignore', env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'ELECTRON_RUN_AS_NODE')) }).unref()`
+  // Answers whether the app runs again; only macOS can ask, elsewhere the launch is trusted.
+  const running = mac
+    ? `String(spawnSync(${JSON.stringify(tools.osascript)}, ['-e', ${JSON.stringify(`${app} is running`)}], { timeout: 10000 }).stdout).trim() === 'true'`
+    : 'true'
+  const open = mac
+    ? `const r = spawnSync(${JSON.stringify(tools.open)}, ['-b', ${JSON.stringify(plan.bundleId)}], { env: clean, timeout: 60000 }); note('open exited ' + r.status + (String(r.stderr || '').trim() ? ': ' + String(r.stderr).trim() : ''))`
+    : `spawn(${JSON.stringify(plan.exe)}, [], { detached: true, stdio: 'ignore', env: clean }).unref()`
   return [
     "const { spawn, spawnSync } = require('node:child_process')",
     "const fs = require('node:fs')",
     `const pid = ${plan.appPid}`,
     `const log = ${JSON.stringify(log)}`,
+    "const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'ELECTRON_RUN_AS_NODE'))",
     "const note = (line) => { try { fs.appendFileSync(log, new Date().toISOString() + ' ' + line + '\\n') } catch {} }",
     'const sleep = (ms) => new Promise(r => setTimeout(r, ms))',
     "const alive = () => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }",
+    `const running = () => { try { return ${running} } catch { return false } }`,
+    `const open = () => { try { ${open} } catch (e) { note('could not open the app: ' + (e && e.message)) } }`,
     'const main = async () => {',
     // Let the page receive its answer before the app starts closing.
     '  await sleep(400)',
@@ -133,9 +152,14 @@ export function restartHelperSource(plan: Exclude<RestartPlan, { kind: 'none' }>
     '  while (alive() && Date.now() < until) await sleep(300)',
     "  if (alive()) { note('the app is still running (the quit was cancelled?); not reopening'); return }",
     '  await sleep(800)',
-    "  note('the app has quit; opening it again')",
-    `  try { ${open} } catch (e) { note('could not open the app: ' + (e && e.message)) }`,
-    '  await sleep(1000)',
+    '  for (let attempt = 1; attempt <= 2; attempt++) {',
+    "    note('opening the app (attempt ' + attempt + ')')",
+    '    open()',
+    '    const by = Date.now() + 20000',
+    '    while (!running() && Date.now() < by) await sleep(500)',
+    "    if (running()) { note('the app is running again'); return }",
+    '  }',
+    "  note('the app did not come back; open it yourself')",
     '}',
     "main().catch(e => note('helper failed: ' + (e && e.stack || e)))",
   ].join('\n')
