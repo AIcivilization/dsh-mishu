@@ -9,6 +9,7 @@
 [![Languages](https://img.shields.io/badge/lang-%E4%B8%AD%E6%96%87%20%7C%20English-orange)](#)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](tsconfig.json)
 [![No telemetry](https://img.shields.io/badge/telemetry-none-success)](docs/调研与设计.md#用户数据安全)
+[![DSH Plugin Hub](https://dsh-plugin.org/badges/listed.svg)](https://dsh-plugin.org/plugins/aicivilization/dsh-mishu)
 
 `提醒` `通知` `待办` `收件箱` `秘书` `GitHub` `邮件` `飞书` `Telegram` · `reminder` `notifications` `todo` `inbox` `triage` `secretary`
 
@@ -139,6 +140,13 @@ dsh plugin --profile <name> add dsh-mishu
 - 飞书；邮件里的"你发出去没人回""你答应别人的事"（要读已发送文件夹）。
 - Outlook / Hotmail：微软只允许 OAuth 登录 IMAP，暂不支持。
 - Windows 和 Linux 的钥匙串已经按各自系统的方式实现，但还没在真机上测过。
+
+### 收录渠道
+
+- [DSH Plugin Hub（dsh-plugin.org 社区插件市场）](https://dsh-plugin.org/plugins/aicivilization/dsh-mishu)
+- [awesome-dsh-plugin 精选列表](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
+- dsh-plugin-shop 插件商店（每日自动收录）
+- 52DSH / tuofangzhe 插件目录（证据分级收录）
 
 ---
 
