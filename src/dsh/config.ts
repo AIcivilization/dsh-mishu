@@ -1,5 +1,5 @@
 import Schema from '@deepseek-ai/schemastery'
-import { CLOSING_REASONS, DEFAULT_HOME, DEFAULT_LEAD_DAYS, type Category, type Lang, type MarkReadMode } from '../core/index.ts'
+import { CLOSING_REASONS, DEFAULT_HOME, GITHUB_CLIENT_ID, DEFAULT_LEAD_DAYS, type Category, type Lang, type MarkReadMode } from '../core/index.ts'
 
 export interface MishuConfig {
   /** Where the notebook lives, outside DSH. `~` expands. */
@@ -13,6 +13,8 @@ export interface MishuConfig {
     tokenEnv: string
     /** Fall back to `gh auth token` (the GitHub CLI's keychain entry). */
     useGhCli: boolean
+    /** Client id of the GitHub OAuth App used by "Sign in with GitHub"; empty hides the button. */
+    clientId: string
     /** off: never touch GitHub; shadow: record what would be marked read; on: mark it. */
     markRead: MarkReadMode
     /** Which closing reasons may mark read when `markRead` is on. */
@@ -32,6 +34,7 @@ export const Config: Schema<MishuConfig> = Schema.object({
     intervalMinutes: Schema.natural().min(5).default(15).description('Minutes between GitHub syncs'),
     tokenEnv: Schema.string().default('GITHUB_TOKEN').description('Environment variable with a GitHub token'),
     useGhCli: Schema.boolean().default(true).description('Fall back to `gh auth token`'),
+    clientId: Schema.string().default(GITHUB_CLIENT_ID).description('GitHub OAuth App client id for "Sign in with GitHub" (device flow)'),
     markRead: Schema.union(['off', 'shadow', 'on']).default('shadow').description('Mark resolved notifications read on GitHub: off / shadow (only record) / on'),
     markReadReasons: Schema.array(Schema.union([...CLOSING_REASONS])).default(['merged', 'closed', 'recovered', 'superseded', 'ref-gone'])
       .description('Closing reasons allowed to mark read'),

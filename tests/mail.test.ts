@@ -192,3 +192,24 @@ test('the connection test explains failures the same way a sync does', async () 
   await assert.rejects(api['/mail/test']!({ lang: 'zh', account, password: 'x' }), /^Error: Could not reach 127\.0\.0\.1:1993: connect ECONNREFUSED/)
   await assert.rejects(api['/mail/test']!({ lang: 'zh', account, password: 'x' }), (e: { text?: { zh: string } }) => e.text?.zh === '连接 127.0.0.1:1993 失败：connect ECONNREFUSED 127.0.0.1:1993')
 })
+
+test('the address picks the provider; app passwords lose their spaces; a mismatched server is pointed out', async () => {
+  const { presetForAddress, normalizePassword, providerMismatch } = await import('../src/core/mail/account.ts')
+  assert.equal(presetForAddress('Me@Gmail.com')?.id, 'gmail')
+  assert.equal(presetForAddress('me@foxmail.com')?.id, 'qq')
+  assert.equal(presetForAddress('me@hotmail.com')?.id, 'outlook')
+  assert.equal(presetForAddress('me@example.com'), undefined)
+
+  assert.equal(normalizePassword('gmail', 'abcd efgh ijkl mnop'), 'abcdefghijklmnop')
+  assert.equal(normalizePassword('custom', 'pass with spaces'), 'pass with spaces', 'a server password may contain spaces')
+
+  const wrong = providerMismatch({ address: 'me@gmail.com', preset: 'qq', host: 'imap.qq.com' })
+  assert.equal(wrong?.zh, '地址是 gmail.com，服务器却是 QQ 邮箱的 imap.qq.com。点「编辑」把服务商改成「Gmail」。')
+  assert.equal(providerMismatch({ address: 'me@gmail.com', preset: 'gmail', host: 'imap.gmail.com' }), undefined)
+  assert.equal(providerMismatch({ address: 'me@gmail.com', preset: 'custom', host: 'mail.example.com' }), undefined, 'a server you entered yourself is your call')
+
+  const store = MishuStore.open(':memory:')
+  const secrets = new MemorySecrets()
+  await saveMailAccount(store, secrets, { preset: 'gmail', address: 'me@gmail.com' }, 'abcd efgh ijkl mnop', MAIL_NOW)
+  assert.equal(await secrets.get('mail:1'), 'abcdefghijklmnop')
+})

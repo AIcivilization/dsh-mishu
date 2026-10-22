@@ -8,7 +8,7 @@
 
 import type { MarkReadMode } from './github/sync.ts'
 import { MishuError, bi, type Lang } from './i18n.ts'
-import { resolveAccount, secretAccount, type MailAccount } from './mail/account.ts'
+import { normalizePassword, resolveAccount, secretAccount, type MailAccount } from './mail/account.ts'
 import { MAIL_SOURCE } from './mail/sync.ts'
 import { CATEGORIES, type Category } from './recur.ts'
 import { secretFromEnv, type SecretStore } from './secrets.ts'
@@ -85,7 +85,7 @@ export async function saveMailAccount(store: MishuStore, secrets: SecretStore, i
   const id = existing?.id ?? (store.get<number>(NEXT_ID_KEY) ?? 1)
   const account = resolveAccount({ ...existing, ...input }, id)
   const keychain = (await secrets.status()).available
-  if (keychain && password !== undefined && password !== '') await secrets.set(secretAccount(id), password)
+  if (keychain && password !== undefined && password !== '') await secrets.set(secretAccount(id), normalizePassword(account.preset, password))
   else if (keychain && existing === undefined && await secrets.get(secretAccount(id)) === undefined && secretFromEnv(secretAccount(id)) === undefined) {
     throw new MishuError(bi('新邮箱要填密码（授权码）', 'a new account needs its password (app password)'))
   }

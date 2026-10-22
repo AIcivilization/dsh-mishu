@@ -7,21 +7,32 @@
  *
  * Secrets travel to the helper on stdin only, never as command-line
  * arguments, which other processes on the machine could read. Everything is
- * stored under the service name "dsh-mishu". When no keychain is available,
- * `secretFromEnv` is the documented fallback.
+ * stored under the service name "dsh-mishu".
+ *
+ * A computer without a usable keychain (a Linux server with no desktop,
+ * say) keeps them in `secrets.json` in the notebook directory instead:
+ * mode 600, so only your own system account can read it. That is how gh,
+ * git and Thunderbird manage on such machines, and it is said plainly on
+ * the settings page: protected by file permissions, not encrypted.
+ * `secretFromEnv` remains a last resort.
  */
 
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { findProgram, runProgram, type RunResult } from './exec.ts'
 import { bi, type Bi } from './i18n.ts'
 
 export const SERVICE = 'dsh-mishu'
 
-/** Whether secrets can be kept here, and if not, why and what to do. */
-export type SecretStatus = { available: true } | { available: false; why: Bi }
+/**
+ * Whether secrets can be kept here, and if not, why and what to do. `file`
+ * says they go to a file because the keychain could not be used.
+ */
+export type SecretStatus = { available: true; file?: { path: string; why: Bi } } | { available: false; why: Bi }
 
 export interface SecretStore {
   /** Where secrets go, for the settings page ("macOS 钥匙串"). */
-  readonly kind: 'macos' | 'windows' | 'linux' | 'memory'
+  readonly kind: 'macos' | 'windows' | 'linux' | 'file' | 'memory'
   status(): Promise<SecretStatus>
   get(account: string): Promise<string | undefined>
   set(account: string, secret: string): Promise<void>
@@ -187,4 +198,91 @@ export function secretEnvName(account: string): string {
 export function secretFromEnv(account: string): string | undefined {
   const value = process.env[secretEnvName(account)]
   return value === undefined || value === '' ? undefined : value
+}
+
+/**
+ * Secrets in one JSON file, readable by your system account only (600).
+ * Written to a temporary file first and renamed, so a crash never leaves
+ * half a file; a file that cannot be read is never overwritten.
+ */
+export class FileSecrets implements SecretStore {
+  readonly kind = 'file' as const
+  readonly path: string
+  constructor(path: string) { this.path = path }
+  async status(): Promise<SecretStatus> { return { available: true } }
+  private read(): Record<string, string> {
+    if (!existsSync(this.path)) return {}
+    // Put the permissions back if something loosened them.
+    if (process.platform !== 'win32' && (statSync(this.path).mode & 0o077) !== 0) chmodSync(this.path, 0o600)
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(readFileSync(this.path, 'utf8'))
+    } catch (error) {
+      throw new Error(`${this.path} cannot be read (${(error as Error).message}); fix or remove it`)
+    }
+    const secrets = (parsed as { secrets?: unknown }).secrets
+    return typeof secrets === 'object' && secrets !== null ? { ...secrets as Record<string, string> } : {}
+  }
+  private write(secrets: Record<string, string>): void {
+    mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 })
+    const temp = `${this.path}.${process.pid}.tmp`
+    writeFileSync(temp, `${JSON.stringify({ version: 1, secrets }, null, 2)}\n`, { mode: 0o600 })
+    renameSync(temp, this.path)
+  }
+  async get(account: string) { return this.read()[account] }
+  async set(account: string, secret: string) {
+    checkAccount(account)
+    checkSecret(secret)
+    this.write({ ...this.read(), [account]: secret })
+  }
+  async delete(account: string) {
+    const secrets = this.read()
+    if (!(account in secrets)) return
+    delete secrets[account]
+    this.write(secrets)
+  }
+}
+
+/**
+ * The keychain when it works, else the file. Reads look in both, so a
+ * secret saved to the file before a keychain was set up is still found;
+ * saving to the keychain removes the file's copy.
+ */
+export class KeychainOrFile implements SecretStore {
+  private readonly keychain: SecretStore
+  private readonly file: FileSecrets
+  private usable: Promise<SecretStatus> | undefined
+  constructor(keychain: SecretStore, file: FileSecrets) {
+    this.keychain = keychain
+    this.file = file
+  }
+  get kind() { return this.keychain.kind }
+  private keychainStatus(): Promise<SecretStatus> {
+    // Asked once per run: a missing helper does not appear while DSH runs.
+    this.usable ??= this.keychain.status().catch((error: Error) => ({ available: false as const, why: bi(error.message, error.message) }))
+    return this.usable
+  }
+  async status(): Promise<SecretStatus> {
+    const keychain = await this.keychainStatus()
+    return keychain.available ? keychain : { available: true, file: { path: this.file.path, why: keychain.why } }
+  }
+  async get(account: string) {
+    if ((await this.keychainStatus()).available) {
+      const stored = await this.keychain.get(account)
+      if (stored !== undefined) return stored
+    }
+    return this.file.get(account)
+  }
+  async set(account: string, secret: string) {
+    if ((await this.keychainStatus()).available) {
+      await this.keychain.set(account, secret)
+      await this.file.delete(account)
+    } else {
+      await this.file.set(account, secret)
+    }
+  }
+  async delete(account: string) {
+    if ((await this.keychainStatus()).available) await this.keychain.delete(account)
+    await this.file.delete(account)
+  }
 }

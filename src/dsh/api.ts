@@ -12,9 +12,9 @@
 
 import {
   addDays, addSeries, bi, buildAsk, buildBoard, buildDetail, dayOf, deleteGithubToken, deleteMailAccount, describeMailError, MishuError, describeSeries, detectLang, errorText, GitHubClient,
-  MAIL_PRESETS, mailReportKey, NEW_TOKEN_URL, resolveSeries, saveGithubToken, saveMailAccount, saveSettings, secretAccount, secretEnvName,
+  MAIL_PRESETS, mailReportKey, NEW_TOKEN_URL, normalizePassword, providerMismatch, resolveSeries, saveGithubToken, saveMailAccount, saveSettings, secretAccount, secretEnvName,
   setStatusByUser, snoozeByUser, stopSeries, tickManual,
-  type AskRequest, type BoardData, type Category, type Lang, type MailAccount, type MailSyncReport, type MishuStore, type SeriesInput, type UserSettings,
+  type AskRequest, type BoardData, type DeviceState, type Category, type Lang, type MailAccount, type MailSyncReport, type MishuStore, type SeriesInput, type UserSettings,
 } from '../core/index.ts'
 import { resolveAccount } from '../core/mail/account.ts'
 import type { Runtime } from './runtime.ts'
@@ -94,6 +94,7 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       ...a,
       hasPassword: (await runtime.mailPassword(a.id)) !== undefined,
       envName: secretEnvName(secretAccount(a.id)),
+      mismatch: providerMismatch(a)?.[lang] ?? null,
       report: store.get<MailSyncReport>(mailReportKey(a.id)) ?? null,
     })))
     return {
@@ -103,11 +104,20 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
         tokenEnv: runtime.config.github.tokenEnv,
         token: 'error' in token ? { found: false, text: token.error[lang] } : { found: true, from: token.from },
         newTokenUrl: NEW_TOKEN_URL,
+        deviceLogin: runtime.config.github.clientId !== '',
         lastSync: store.get('github.lastSync') ?? null,
       },
-      secrets: { kind: runtime.secrets.kind, available: secrets.available, ...secrets.available ? {} : { why: secrets.why[lang] } },
+      secrets: {
+        kind: runtime.secrets.kind,
+        available: secrets.available,
+        ...secrets.available ? {} : { why: secrets.why[lang] },
+        ...secrets.available && secrets.file !== undefined ? { file: { path: secrets.file.path, why: secrets.file.why[lang] } } : {},
+      },
       accounts,
-      presets: MAIL_PRESETS.map(p => ({ id: p.id, label: p.label[lang], host: p.host, port: p.port, secure: p.secure, supported: p.supported, howTo: p.howTo[lang] })),
+      presets: MAIL_PRESETS.map(p => ({
+        id: p.id, label: p.label[lang], host: p.host, port: p.port, secure: p.secure, supported: p.supported, howTo: p.howTo[lang],
+        domains: p.domains, setupUrl: p.setupUrl ?? null, passwordLength: p.passwordLength ?? null,
+      })),
     }
   }
 
@@ -219,6 +229,20 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       return { login, view: await settingsView(lang) }
     },
 
+    /** "Sign in with GitHub": a code to enter on github.com; the host waits for your approval. */
+    '/github/device/start': async (body) => ({ login: deviceView(await runtime.githubLogin.start(), langOf(body)) }),
+
+    '/github/device/status': async (body) => {
+      const lang = langOf(body)
+      const state = runtime.githubLogin.status()
+      return { login: deviceView(state, lang), ...state.state === 'done' ? { view: await settingsView(lang) } : {} }
+    },
+
+    '/github/device/cancel': async (body) => {
+      runtime.githubLogin.cancel()
+      return { login: deviceView(runtime.githubLogin.status(), langOf(body)) }
+    },
+
     '/github/token/delete': async (body) => {
       await deleteGithubToken(runtime.secrets)
       return { view: await settingsView(langOf(body)) }
@@ -235,7 +259,8 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       const lang = langOf(body)
       const input = accountInput(body.account)
       const draft = resolveAccount(input, input.id ?? 0)
-      const secret = password(body) ?? (input.id === undefined ? undefined : await runtime.mailPassword(input.id))
+      const typed = password(body)
+      const secret = typed !== undefined ? normalizePassword(draft.preset, typed) : input.id === undefined ? undefined : await runtime.mailPassword(input.id)
       if (secret === undefined) throw new ApiError(lang === 'zh' ? '先填密码（授权码）再测试' : 'Enter the password (app password) first')
       try {
         const messages = await runtime.fetcher.unread(draft, secret, draft.sinceDays, clock())
@@ -274,6 +299,11 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       return { report: report ?? null, view: await settingsView(lang) }
     },
   }
+}
+
+/** The page's view of a sign-in: messages in its language. */
+function deviceView(state: DeviceState, lang: Lang): Record<string, unknown> {
+  return state.state === 'failed' ? { state: 'failed', message: state.message[lang] } : { ...state }
 }
 
 /** Run one handler; failures become `{ ok: false, message }` in the caller's language. */

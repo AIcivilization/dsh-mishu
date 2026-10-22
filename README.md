@@ -55,7 +55,9 @@
 
 同一封邮件的往来回复算一件事。你在邮件客户端里看过之后，对应的事项会自动关闭。
 
-**密码放在系统钥匙串**：macOS 钥匙串、Windows 凭据管理器、Linux 密钥环（Secret Service）。密码只在设置页输入一次，直接交给钥匙串，不写进任何文件，接口也从不返回它。没有钥匙串的电脑（比如没有桌面的 Linux 服务器），设置页会说明原因；账户照样能保存，密码改用环境变量 `DSH_MISHU_SECRET_MAIL_<编号>` 提供。
+**密码放在系统钥匙串**：macOS 钥匙串、Windows 凭据管理器、Linux 密钥环（Secret Service）。密码只在设置页输入一次，直接交给钥匙串，不写进任何文件，接口也从不返回它。没有钥匙串的电脑（比如没有桌面的 Linux 服务器），密码和 token 存进记事本目录里的 `secrets.json`：权限 600，只有你的系统账号能读，但没有加密，设置页会写明这一点和原因。
+
+**添加邮箱**：点"+ 添加邮箱"弹出向导。填了地址就自动选好服务商，显示去哪里开 IMAP、拿授权码，带"打开设置页"；授权码位数不对会提醒；"测试并保存"连得上才保存。
 
 ### 用法
 
@@ -103,7 +105,7 @@ agent 可用的工具：`mishu_add`（交代，需要你审批）、`mishu_list`
 按顺序取，token 不写进任何文件：
 
 1. 环境变量（默认 `GITHUB_TOKEN`）
-2. 你在设置页填的 token：先拿到 GitHub 上检查，再存进系统钥匙串。要用 classic token，勾选 `notifications`（看私有仓库再勾 `repo`）；GitHub 的通知接口不认 fine-grained token
+2. 在设置页"用 GitHub 登录"拿到的 token（GitHub 设备登录：显示一个登录码，你在 github.com/login/device 输入并授权，手机或别的电脑上都行），或者你粘贴的 token：先拿到 GitHub 上检查，再存进系统钥匙串（没钥匙串时存进 `secrets.json`）。要用 classic token，勾选 `notifications`（看私有仓库再勾 `repo`）；GitHub 的通知接口不认 fine-grained token
 3. `gh auth token`：装了 GitHub CLI，并运行过 `gh auth login` 就行。从 Dock、开始菜单启动的 DSH 拿到的 PATH 往往很短，所以小秘书除了 PATH，还会去 Homebrew、`~/.local/bin`、winget、Scoop 等常见安装位置找 `gh`
 
 ### 安装和配置
@@ -188,7 +190,9 @@ Default warning times: documents 90 days, bills 3, birthdays 7, renewals 7, ever
 
 A thread of replies is one item. Once you read it in your mail client, its item closes by itself.
 
-**Passwords live in the system keychain**: the macOS Keychain, Windows Credential Manager or the Linux keyring (Secret Service). You type a password once on the settings page; it goes straight to the keychain, is never written to a file and is never returned by any endpoint. On a computer without one (a Linux server with no desktop, say), the settings page says why; accounts still save, and each password comes from the environment variable `DSH_MISHU_SECRET_MAIL_<id>`.
+**Passwords live in the system keychain**: the macOS Keychain, Windows Credential Manager or the Linux keyring (Secret Service). You type a password once on the settings page; it goes straight to the keychain, is never written to a file and is never returned by any endpoint. On a computer without one (a Linux server with no desktop, say), passwords and tokens go to `secrets.json` in the notebook directory: mode 600, readable by your system account only, but not encrypted, and the settings page says so and why.
+
+**Adding a mail account**: "+ Add a mail account" opens a short guide. The address picks the provider; it says where to turn on IMAP and get the app password, with a button that opens that page; it warns when the password has the wrong length; "Test and save" keeps only an account that connects.
 
 ### Usage
 
@@ -236,7 +240,7 @@ Tools for the agent: `mishu_add` (needs your approval), `mishu_list`, `mishu_det
 It uses, in order, and never writes a token to a file:
 
 1. an environment variable (default `GITHUB_TOKEN`)
-2. a token you paste on the settings page: checked with GitHub first, then kept in the system keychain. Use a classic token with the `notifications` scope (plus `repo` for private repositories); GitHub's notifications API does not take fine-grained tokens
+2. a token from "Sign in with GitHub" on the settings page (GitHub's device flow: it shows a code you enter at github.com/login/device, from a phone or another computer if you like), or one you paste: checked with GitHub first, then kept in the system keychain (in `secrets.json` without one). Use a classic token with the `notifications` scope (plus `repo` for private repositories); GitHub's notifications API does not take fine-grained tokens
 3. `gh auth token`: if the GitHub CLI is installed and you have run `gh auth login`. DSH started from the Dock or Start menu often gets a short PATH, so besides PATH the secretary looks for `gh` where Homebrew, `~/.local/bin`, winget and Scoop put it
 
 ### Install and configure

@@ -16,6 +16,9 @@ import { GitHubClient, GitHubError, type FetchLike } from './client.ts'
 /** The keychain entry for a token pasted on the settings page. */
 export const GITHUB_SECRET = 'github'
 
+/** The OAuth App behind "Sign in with GitHub" (device flow, "DSH 小秘书"); public, not a secret. */
+export const GITHUB_CLIENT_ID = 'Ov23liejlNOyARQKgy5x'
+
 /** Opens GitHub's "new classic token" page with the two scopes ticked. */
 export const NEW_TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=notifications,repo&description=DSH%20mishu'
 

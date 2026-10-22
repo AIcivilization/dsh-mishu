@@ -63,6 +63,8 @@ export interface AccountView {
   sinceDays: number
   hasPassword: boolean
   envName: string
+  /** The address belongs to another provider than the server. */
+  mismatch: string | null
   report: { at: number; messages: number; opened: number; closed: number; error?: { zh: string; en: string } } | null
 }
 
@@ -74,6 +76,9 @@ export interface PresetView {
   secure: boolean
   supported: boolean
   howTo: string
+  domains: string[]
+  setupUrl: string | null
+  passwordLength: number | null
 }
 
 export interface SettingsView {
@@ -88,19 +93,26 @@ export interface SettingsView {
     tokenEnv: string
     token: { found: true; from: 'env' | 'keychain' | 'gh' } | { found: false; text: string }
     newTokenUrl: string
+    deviceLogin: boolean
     lastSync: { at: number; notifications: number; error?: { zh: string; en: string } } | null
   }
-  secrets: { kind: string; available: boolean; why?: string }
+  secrets: { kind: string; available: boolean; why?: string; file?: { path: string; why: string } }
   accounts: AccountView[]
   presets: PresetView[]
 }
 
-export type AccountDraft = Partial<Omit<AccountView, 'hasPassword' | 'envName' | 'report'>>
+export type AccountDraft = Partial<Omit<AccountView, 'hasPassword' | 'envName' | 'report' | 'mismatch'>>
 
 export const restartApi = {
   info: (lang: string) => post<{ supported: true } | { supported: false; why: string }>('/restart/info', { lang }),
   restart: (lang: string) => post<{ restarting: true }>('/restart', { lang }),
 }
+
+export type DeviceView =
+  | { state: 'idle' }
+  | { state: 'waiting'; userCode: string; verificationUri: string; expiresAt: number }
+  | { state: 'done'; login: string }
+  | { state: 'failed'; message: string }
 
 export const settingsApi = {
   load: (lang: string) => post<{ view: SettingsView }>('/settings', { lang }),
@@ -108,6 +120,9 @@ export const settingsApi = {
   testGithub: (lang: string) => post<{ login: string; from: string }>('/github/test', { lang }),
   saveToken: (lang: string, token: string) => post<{ login: string; view: SettingsView }>('/github/token/save', { lang, token }),
   deleteToken: (lang: string) => post<{ view: SettingsView }>('/github/token/delete', { lang }),
+  deviceStart: (lang: string) => post<{ login: DeviceView }>('/github/device/start', { lang }),
+  deviceStatus: (lang: string) => post<{ login: DeviceView; view?: SettingsView }>('/github/device/status', { lang }),
+  deviceCancel: (lang: string) => post<{ login: DeviceView }>('/github/device/cancel', { lang }),
   saveMail: (lang: string, account: AccountDraft, password: string) => post<{ id: number; view: SettingsView }>('/mail/save', { lang, account, password }),
   testMail: (lang: string, account: AccountDraft, password: string) => post<{ unread: number }>('/mail/test', { lang, account, password }),
   deleteMail: (lang: string, id: number) => post<{ view: SettingsView }>('/mail/delete', { lang, id }),

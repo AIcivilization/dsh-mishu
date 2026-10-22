@@ -15,6 +15,7 @@ const DANGER = v('state-error-primary', '#d14343')
 const WARN = v('state-warn-primary', '#b7791f')
 const OK = v('state-success-primary', '#2f855a')
 const ACCENT = v('brand-primary', '#4d6bfe')
+const SURFACE = v('bg-layer-0', v('bg-base', 'Canvas'))
 
 export const STYLES = `
 .mishu-page{box-sizing:border-box;height:100%;overflow:auto;padding:20px 24px 32px;color:${TEXT};font-size:13px;line-height:1.5}
@@ -76,6 +77,18 @@ export const STYLES = `
 .mishu-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .mishu-preview{white-space:pre-wrap;font-size:12px;background:${LAYER2};border-radius:6px;padding:6px 8px;margin:4px 0 6px;color:${TEXT}}
 .mishu-preview.mishu-danger{color:${DANGER}}
+.mishu-modal-backdrop{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+.mishu-modal{background:${SURFACE};color:${TEXT};border:1px solid ${LINE_STRONG};border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35);width:min(480px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:14px 16px 16px;font-size:13px;line-height:1.5}
+.mishu-modal *{box-sizing:border-box}
+.mishu-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.mishu-modal-head h2{font-size:15px;font-weight:600;margin:0}
+.mishu-steps{font-size:12px;color:${MUTED};background:${LAYER1};border-radius:8px;padding:8px 10px;margin:2px 0 10px;line-height:1.6}
+.mishu-steps .mishu-actions{margin-top:6px}
+.mishu-steps.mishu-danger{color:${DANGER}}
+.mishu-more{margin:4px 0 8px;font-size:12px;color:${MUTED}}
+.mishu-more summary{cursor:pointer;margin-bottom:6px}
+.mishu-code-row{display:flex;align-items:center;gap:10px;margin:2px 0 10px}
+.mishu-code{font:600 26px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:3px;user-select:all;padding:4px 10px;border-radius:8px;background:${LAYER2}}
 .mishu-add>.mishu-hint{margin-bottom:8px}
 .mishu-title{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .mishu-tabs{display:flex;gap:2px;background:${LAYER1};border-radius:8px;padding:2px}

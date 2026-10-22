@@ -7,7 +7,7 @@
 
 import {
   dayOf, detectLang, effectiveSettings, GitHubClient, ImapFetcher, mailAccounts, mailReportKey, renderBrief,
-  resolveGithubToken, secretAccount, secretFromEnv, syncGithub, syncMail, systemSecrets, tickManual, bi,
+  FileSecrets, GithubDeviceLogin, KeychainOrFile, mishuPaths, resolveGithubToken, secretAccount, secretFromEnv, syncGithub, syncMail, systemSecrets, tickManual, bi,
   type Defaults, type GithubSyncReport, type Lang, type MailAccount, type MailFetcher, type MailSyncReport, type MishuStore,
   restartPlan, scheduleRestart, type RestartPlan, type SecretStore, type TokenResult,
 } from '../core/index.ts'
@@ -22,13 +22,21 @@ export class Runtime {
   readonly fetcher: MailFetcher
   private readonly logger: Logger
   private syncing: Promise<void> | undefined
+  /** "Sign in with GitHub" in progress, if any; tests swap it to replay GitHub. */
+  githubLogin: GithubDeviceLogin
   /** How DSH restarts; tests swap it so they never restart anything. */
   restarter: { plan(): RestartPlan; schedule(plan: Exclude<RestartPlan, { kind: 'none' }>): { log: string } } = { plan: () => restartPlan(), schedule: scheduleRestart }
 
-  constructor(config: MishuConfig, logger: Logger, secrets: SecretStore = systemSecrets(), fetcher: MailFetcher = new ImapFetcher()) {
+  constructor(
+    config: MishuConfig,
+    logger: Logger,
+    secrets: SecretStore = new KeychainOrFile(systemSecrets(), new FileSecrets(mishuPaths(config.home).secrets)),
+    fetcher: MailFetcher = new ImapFetcher(),
+  ) {
     this.config = config
     this.logger = logger
     this.secrets = secrets
+    this.githubLogin = new GithubDeviceLogin({ clientId: config.github.clientId, secrets })
     this.fetcher = fetcher
   }
 
@@ -108,7 +116,7 @@ export class Runtime {
     if (password === undefined) {
       const report: MailSyncReport = {
         at: Date.now(), account: account.id, messages: 0, opened: 0, closed: 0,
-        error: bi('没有找到这个邮箱的密码（授权码）。到设置页重新填一次。', 'No password (app password) found for this account. Enter it again on the settings page.'),
+        error: bi('没有找到这个邮箱的密码（授权码）。在设置页点这个邮箱的「编辑」，重新填一次。', 'No password (app password) found for this account. On the settings page, click Edit on this account and enter it again.'),
       }
       store.set(mailReportKey(account.id), report)
       return report
