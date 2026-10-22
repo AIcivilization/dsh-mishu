@@ -1,6 +1,6 @@
 {
   "name": "dsh-mishu",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "DSH secretary (小秘书) for DeepSeek Harness (dsh): watches GitHub notifications and the dated things you tell it (bills, renewals, documents, birthdays), closes what is already resolved, and keeps a short list of what actually needs you. Bilingual (中文 / English), macOS / Windows / Linux. · DSH 小秘书：提醒、通知、待办、消息、收件箱、秘书。GitHub 通知按当前状态分诊，交代一句就记下到期和周期事项。",
   "type": "module",
   "main": "lib/index.js",
