@@ -85,7 +85,8 @@ test('a rejected login explains app passwords; nothing is half-written', async (
   const store = MishuStore.open(':memory:')
   const failing: MailFetcher = { unread: async () => { throw Object.assign(new Error('Command failed'), { responseText: 'Invalid credentials (Failure)' }) } }
   const report = await syncMail({ store, account: ACCOUNT, fetcher: failing, password: 'wrong', now: MAIL_NOW })
-  assert.match(report.error!.zh, /^登录失败：服务器不接受这个用户名或密码（Invalid credentials \(Failure\)）。多数邮箱要填客户端授权码或应用专用密码/)
+  assert.match(report.error!.zh, /^登录失败：服务器不接受这个用户名或密码（Invalid credentials \(Failure\)）。多数邮箱要先开启 IMAP，再填客户端授权码或应用专用密码/)
+  assert.match(report.error!.zh, /\nGmail：Google 账号先开启两步验证/, 'says where this provider\'s app password comes from')
   assert.equal(store.openMatters().length, 0)
   const unreachable: MailFetcher = { unread: async () => { throw new Error('getaddrinfo ENOTFOUND imap.gmail.com') } }
   assert.match((await syncMail({ store, account: ACCOUNT, fetcher: unreachable, password: 'p', now: MAIL_NOW })).error!.en, /^Could not reach imap\.gmail\.com:993/)
@@ -112,6 +113,8 @@ test('accounts keep their password in the keychain only; removing one closes its
   const secrets = new MemorySecrets()
   await assert.rejects(saveMailAccount(store, secrets, { preset: 'qq', address: 'me@example.com' }, undefined, MAIL_NOW), /a new account needs its password/)
   await assert.rejects(saveMailAccount(store, secrets, { preset: 'outlook', address: 'me@example.com' }, 'p', MAIL_NOW), /not supported yet/)
+  await assert.rejects(saveMailAccount(store, secrets, { preset: 'custom', address: 'me@example.com', host: '1993' }, 'p', MAIL_NOW), /invalid IMAP server: 1993/)
+  await assert.rejects(saveMailAccount(store, secrets, { preset: 'custom', address: 'me@example.com', host: '' }, 'p', MAIL_NOW), /invalid IMAP server: \(empty\)/)
   const account = await saveMailAccount(store, secrets, { preset: 'qq', address: 'Me@Example.com', label: '私人' }, 'qq-auth-code', MAIL_NOW)
   assert.deepEqual(account, { id: 1, label: '私人', address: 'me@example.com', preset: 'qq', host: 'imap.qq.com', port: 993, secure: true, user: 'me@example.com', enabled: true, sinceDays: 14 })
   assert.equal(await secrets.get('mail:1'), 'qq-auth-code')

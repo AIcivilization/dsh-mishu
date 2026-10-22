@@ -172,6 +172,15 @@ export class GitHubClient {
     return this.get('/user')
   }
 
+  /** Whether this token may read notifications (fine-grained tokens get 403). */
+  async canReadNotifications(): Promise<boolean> {
+    const url = `${API}/notifications?per_page=1`
+    const { status, body } = await this.raw('GET', url)
+    if (status >= 200 && status < 300) return true
+    if (status === 403 || status === 404) return false
+    throw new GitHubError(status, url, (body as { message?: string } | undefined)?.message ?? 'request failed')
+  }
+
   repo(fullName: string): Promise<RepoInfo> {
     return this.get(`/repos/${fullName}`)
   }

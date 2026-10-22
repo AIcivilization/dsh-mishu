@@ -9,7 +9,7 @@ import {
   dayOf, detectLang, effectiveSettings, GitHubClient, ImapFetcher, mailAccounts, mailReportKey, renderBrief,
   resolveGithubToken, secretAccount, secretFromEnv, syncGithub, syncMail, systemSecrets, tickManual, bi,
   type Defaults, type GithubSyncReport, type Lang, type MailAccount, type MailFetcher, type MailSyncReport, type MishuStore,
-  type SecretStore,
+  type SecretStore, type TokenResult,
 } from '../core/index.ts'
 import type { MishuConfig } from './config.ts'
 
@@ -76,10 +76,15 @@ export class Runtime {
     return secretFromEnv(secretAccount(id))
   }
 
+  /** The GitHub token: environment, then the keychain, then the GitHub CLI. */
+  githubToken(): Promise<TokenResult> {
+    return resolveGithubToken({ envName: this.config.github.tokenEnv, useGhCli: this.config.github.useGhCli, secrets: this.secrets })
+  }
+
   private async syncGithubNow(store: MishuStore): Promise<void> {
     const settings = this.settings()
     if (!settings.githubEnabled) return
-    const token = await resolveGithubToken(this.config.github.tokenEnv, this.config.github.useGhCli)
+    const token = await this.githubToken()
     if ('error' in token) {
       const report: GithubSyncReport = { at: Date.now(), notifications: 0, opened: 0, closed: 0, wouldMarkRead: 0, markedRead: 0, checkFailures: 0, apiCalls: 0, error: token.error }
       store.set('github.lastSync', report)

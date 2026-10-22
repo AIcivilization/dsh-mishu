@@ -75,6 +75,8 @@ export const STYLES = `
 .mishu-field input,.mishu-field select{font:inherit;font-size:13px;color:${TEXT};background:${LAYER2};border:1px solid ${LINE_STRONG};border-radius:6px;padding:4px 6px;width:100%}
 .mishu-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .mishu-preview{white-space:pre-wrap;font-size:12px;background:${LAYER2};border-radius:6px;padding:6px 8px;margin:4px 0 6px;color:${TEXT}}
+.mishu-preview.mishu-danger{color:${DANGER}}
+.mishu-add>.mishu-hint{margin-bottom:8px}
 .mishu-title{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .mishu-tabs{display:flex;gap:2px;background:${LAYER1};border-radius:8px;padding:2px}
 .mishu-tabs button{font:inherit;font-size:13px;color:${MUTED};background:transparent;border:0;border-radius:6px;padding:3px 12px;cursor:pointer}

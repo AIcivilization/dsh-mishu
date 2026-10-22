@@ -11,8 +11,8 @@
  */
 
 import {
-  addDays, addSeries, buildAsk, buildBoard, buildDetail, dayOf, deleteMailAccount, describeMailError, MishuError, describeSeries, detectLang, errorText, GitHubClient,
-  MAIL_PRESETS, mailReportKey, resolveGithubToken, resolveSeries, saveMailAccount, saveSettings, secretAccount, secretEnvName,
+  addDays, addSeries, bi, buildAsk, buildBoard, buildDetail, dayOf, deleteGithubToken, deleteMailAccount, describeMailError, MishuError, describeSeries, detectLang, errorText, GitHubClient,
+  MAIL_PRESETS, mailReportKey, NEW_TOKEN_URL, resolveSeries, saveGithubToken, saveMailAccount, saveSettings, secretAccount, secretEnvName,
   setStatusByUser, snoozeByUser, stopSeries, tickManual,
   type AskRequest, type BoardData, type Category, type Lang, type MailAccount, type MailSyncReport, type MishuStore, type SeriesInput, type UserSettings,
 } from '../core/index.ts'
@@ -88,9 +88,8 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
   /** Everything the settings page shows. No secret is ever included. */
   const settingsView = async (lang: Lang) => {
     const store = need(lang)
-    const token = await resolveGithubToken(runtime.config.github.tokenEnv, runtime.config.github.useGhCli)
-    let available = false
-    try { available = await runtime.secrets.available() } catch { available = false }
+    const token = await runtime.githubToken()
+    const secrets = await runtime.secrets.status().catch((error: Error) => ({ available: false as const, why: bi(error.message, error.message) }))
     const accounts = await Promise.all(runtime.accounts().map(async a => ({
       ...a,
       hasPassword: (await runtime.mailPassword(a.id)) !== undefined,
@@ -103,9 +102,10 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       github: {
         tokenEnv: runtime.config.github.tokenEnv,
         token: 'error' in token ? { found: false, text: token.error[lang] } : { found: true, from: token.from },
+        newTokenUrl: NEW_TOKEN_URL,
         lastSync: store.get('github.lastSync') ?? null,
       },
-      secrets: { kind: runtime.secrets.kind, available },
+      secrets: { kind: runtime.secrets.kind, available: secrets.available, ...secrets.available ? {} : { why: secrets.why[lang] } },
       accounts,
       presets: MAIL_PRESETS.map(p => ({ id: p.id, label: p.label[lang], host: p.host, port: p.port, secure: p.secure, supported: p.supported, howTo: p.howTo[lang] })),
     }
@@ -188,6 +188,7 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
         ...ask.id === undefined ? {} : { id: Number(ask.id) },
         ...ask.accountId === undefined ? {} : { accountId: Number(ask.accountId) },
         ...ask.preset === undefined ? {} : { preset: String(ask.preset) },
+        ...typeof ask.error === 'string' && ask.error !== '' ? { error: ask.error.slice(0, 1000) } : {},
       } as AskRequest
       const prompt = buildAsk(need(lang), request, { now: clock(), lang, markRead: runtime.settings().markRead, accounts: runtime.accounts() })
       return { prompt }
@@ -205,10 +206,22 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
 
     '/github/test': async (body) => {
       const lang = langOf(body)
-      const token = await resolveGithubToken(runtime.config.github.tokenEnv, runtime.config.github.useGhCli)
+      const token = await runtime.githubToken()
       if ('error' in token) throw new ApiError(token.error[lang])
       const user = await new GitHubClient({ token: token.token }).user()
       return { login: user.login, from: token.from }
+    },
+
+    /** A pasted token: checked with GitHub, then kept in the keychain only. */
+    '/github/token/save': async (body) => {
+      const lang = langOf(body)
+      const { login } = await saveGithubToken(runtime.secrets, typeof body.token === 'string' ? body.token : '')
+      return { login, view: await settingsView(lang) }
+    },
+
+    '/github/token/delete': async (body) => {
+      await deleteGithubToken(runtime.secrets)
+      return { view: await settingsView(langOf(body)) }
     },
 
     '/mail/save': async (body) => {

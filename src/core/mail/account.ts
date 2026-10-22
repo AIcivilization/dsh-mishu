@@ -25,7 +25,10 @@ export interface MailPreset {
 export const MAIL_PRESETS: readonly MailPreset[] = [
   {
     id: 'qq', label: bi('QQ 邮箱', 'QQ Mail'), host: 'imap.qq.com', port: 993, secure: true, supported: true,
-    howTo: bi('在 QQ 邮箱网页版：设置 → 账号 → 开启「IMAP/SMTP 服务」，按提示生成授权码。这里填授权码，不是 QQ 密码。', 'In QQ Mail on the web: Settings → Account → turn on "IMAP/SMTP" and generate an authorization code. Enter that code here, not your QQ password.'),
+    howTo: bi(
+      '在 QQ 邮箱网页版：设置 → 账号与安全 → 安全设置（旧版界面是 设置 → 账户），开启「IMAP/SMTP 服务」，按提示验证后生成 16 位授权码。这里填授权码，不是 QQ 密码；改过 QQ 密码后，旧授权码会失效。',
+      'In QQ Mail on the web: Settings → Account and Security → Security (Settings → Account in the older layout), turn on "IMAP/SMTP", verify, and generate a 16-character authorization code. Enter that code here, not your QQ password; changing your QQ password expires old codes.',
+    ),
   },
   {
     id: '163', label: bi('网易 163 邮箱', 'NetEase 163'), host: 'imap.163.com', port: 993, secure: true, supported: true,
@@ -87,7 +90,10 @@ export function resolveAccount(input: Partial<MailAccount>, id: number): MailAcc
   const preset = presetById(String(input.preset ?? 'custom'))
   if (!preset.supported) throw new MishuError(bi(`${preset.label.zh}暂时不支持：${preset.howTo.zh}`, `${preset.label.en} is not supported yet: ${preset.howTo.en}`))
   const host = preset.id === 'custom' ? String(input.host ?? '').trim() : preset.host
-  if (!/^[\w.-]+$/.test(host)) throw new MishuError(bi('IMAP 服务器地址不对', 'invalid IMAP server'))
+  // A name with a dot (imap.example.com), a full IPv4 address, or localhost; a bare number is a port typed in the wrong box.
+  if (!/^[\w-]+(\.[\w-]+)+$/.test(host) && host !== 'localhost' || /^\d+$/.test(host)) {
+    throw new MishuError(bi(`IMAP 服务器地址不对：${host || '（空）'}，应该像 imap.example.com`, `invalid IMAP server: ${host || '(empty)'}; it should look like imap.example.com`))
+  }
   const port = preset.id === 'custom' ? Number(input.port ?? 993) : preset.port
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new MishuError(bi('端口要是 1 到 65535 的整数', 'the port must be a whole number from 1 to 65535'))
   const sinceDays = Number(input.sinceDays ?? 14)

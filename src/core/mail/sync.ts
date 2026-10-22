@@ -11,7 +11,7 @@ import { applyVerdict, closeReadElsewhere } from '../fold.ts'
 import { bi, type Bi } from '../i18n.ts'
 import type { MishuStore } from '../store.ts'
 import type { Verdict } from '../github/rules.ts'
-import type { MailAccount, MailFetcher, MailMessage } from './account.ts'
+import { presetById, type MailAccount, type MailFetcher, type MailMessage } from './account.ts'
 import { judgeMail } from './rules.ts'
 
 export const MAIL_SOURCE = 'mail'
@@ -26,12 +26,16 @@ export interface MailSyncReport {
 }
 
 /** A connection or login failure, said so a person knows what to fix. */
-export function describeMailError(error: unknown, account: Pick<MailAccount, 'host' | 'port'>): Bi {
+export function describeMailError(error: unknown, account: Pick<MailAccount, 'host' | 'port' | 'preset'>): Bi {
   const raw = (error as { responseText?: string; message?: string }).responseText ?? (error as Error).message ?? String(error)
   const auth = /auth|login|password|credential|AUTHENTICATIONFAILED|LOGIN failed/i.test(raw)
-  return auth
-    ? bi(`登录失败：服务器不接受这个用户名或密码（${raw}）。多数邮箱要填客户端授权码或应用专用密码，不是网页登录密码。`, `Login failed: the server rejected the user name or password (${raw}). Most providers need an app password, not your web password.`)
-    : bi(`连接 ${account.host}:${account.port} 失败：${raw}`, `Could not reach ${account.host}:${account.port}: ${raw}`)
+  if (!auth) return bi(`连接 ${account.host}:${account.port} 失败：${raw}`, `Could not reach ${account.host}:${account.port}: ${raw}`)
+  const preset = presetById(account.preset)
+  const howTo = preset.id === 'custom' ? undefined : preset.howTo
+  return bi(
+    `登录失败：服务器不接受这个用户名或密码（${raw}）。多数邮箱要先开启 IMAP，再填客户端授权码或应用专用密码，不是网页登录密码。${howTo === undefined ? '' : `\n${preset.label.zh}：${howTo.zh}`}`,
+    `Login failed: the server rejected the user name or password (${raw}). Most providers need IMAP turned on and an app password, not your web password.${howTo === undefined ? '' : `\n${preset.label.en}: ${howTo.en}`}`,
+  )
 }
 
 export function mailReportKey(accountId: number): string {

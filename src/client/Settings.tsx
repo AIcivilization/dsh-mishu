@@ -21,6 +21,7 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
   const [lead, setLead] = useState<Record<string, number>>({})
   const [githubTest, setGithubTest] = useState<string | undefined>()
   const [confirmOn, setConfirmOn] = useState(false)
+  const [pasting, setPasting] = useState(false)
   const [editing, setEditing] = useState<AccountDraft | undefined>()
 
   const take = (result: { ok: true; view: SettingsView } | { ok: false; message: string }, saved?: string) => {
@@ -74,15 +75,28 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
         <label className="mishu-check"><input type="checkbox" checked={view.settings.githubEnabled} onChange={e => { void save({ githubEnabled: e.target.checked }) }} />{t.sGithubOn}</label>
         <div className="mishu-row-explain">
           <span className="mishu-row-label">{t.sToken}</span>
-          <span className={token.found ? '' : 'mishu-danger'}>{token.found ? (token.from === 'env' ? t.sTokenEnv(view.github.tokenEnv) : t.sTokenGh) : token.text}</span>
+          <span className={token.found ? '' : 'mishu-danger'}>
+            {token.found ? (token.from === 'env' ? t.sTokenEnv(view.github.tokenEnv) : token.from === 'keychain' ? t.sTokenKeychain : t.sTokenGh) : token.text}
+          </span>
         </div>
-        <div className="mishu-actions">
-          <button type="button" className="mishu-btn" onClick={() => {
-            setGithubTest(t.sTesting)
-            void settingsApi.testGithub(locale()).then(r => setGithubTest(r.ok ? t.sGithubOk(r.login) : `${t.failed}${r.message}`))
-          }}>{t.sTest}</button>
-          {githubTest === undefined ? null : <span className="mishu-hint">{githubTest}</span>}
-        </div>
+        {token.found ? (
+          <div className="mishu-actions">
+            <button type="button" className="mishu-btn" onClick={() => {
+              setGithubTest(t.sTesting)
+              void settingsApi.testGithub(locale()).then(r => setGithubTest(r.ok ? t.sGithubOk(r.login) : `${t.failed}${r.message}`))
+            }}>{t.sTest}</button>
+            {token.from === 'env' || pasting ? null : <button type="button" className="mishu-btn" onClick={() => setPasting(true)}>{t.sTokenReplace}</button>}
+            {token.from === 'keychain' ? (
+              <button type="button" className="mishu-btn mishu-btn-quiet" onClick={() => {
+                if (window.confirm(t.sTokenRemoveConfirm)) void settingsApi.deleteToken(locale()).then(r => { setGithubTest(undefined); take(r) })
+              }}>{t.sTokenRemove}</button>
+            ) : null}
+            {githubTest === undefined ? null : <span className="mishu-hint">{githubTest}</span>}
+          </div>
+        ) : null}
+        {!token.found || pasting
+          ? <TokenForm view={view} lang={lang} locale={locale} onSaved={(next, login) => { setPasting(false); setGithubTest(t.sTokenSaved(login)); take({ ok: true, view: next }) }} onCancel={token.found ? () => setPasting(false) : undefined} />
+          : null}
         <label className="mishu-field">{t.sMarkRead}
           <select value={view.settings.markRead} onChange={(e) => {
             const value = e.target.value as SettingsView['settings']['markRead']
@@ -108,7 +122,7 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
       <section className="mishu-panel">
         <h2>{t.sMail}</h2>
         <p className="mishu-hint">{t.sMailPrivacy}</p>
-        <p className={view.secrets.available ? 'mishu-hint' : 'mishu-hint mishu-warn'}>{view.secrets.available ? t.sSecretsAt(secretKind) : t.sSecretsNone}</p>
+        <p className={view.secrets.available ? 'mishu-hint' : 'mishu-hint mishu-warn'}>{view.secrets.available ? t.sSecretsAt(secretKind) : t.sSecretsNone(view.secrets.why ?? secretKind)}</p>
         {view.accounts.length === 0 ? <p className="mishu-empty">{t.sNoAccounts}</p> : view.accounts.map(account => (
           <AccountRow key={account.id} account={account} lang={lang} locale={locale} openChat={openChat}
             onEdit={() => setEditing({ ...account })}
@@ -123,6 +137,46 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
         <h2>{t.sFeishu}</h2>
         <p className="mishu-hint">{t.sComing}</p>
       </section>
+    </div>
+  )
+}
+
+/** Paste a token: the host checks it with GitHub, then keeps it in the keychain. */
+function TokenForm({ view, lang, locale, onSaved, onCancel }: {
+  view: SettingsView; lang: UiLang; locale: () => string
+  onSaved: (view: SettingsView, login: string) => void; onCancel: (() => void) | undefined
+}) {
+  const t = TEXT[lang]
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | undefined>()
+  if (!view.secrets.available) {
+    return <p className="mishu-hint mishu-warn">{t.sTokenNoKeychain(view.github.tokenEnv, view.secrets.why ?? '')}</p>
+  }
+  const save = async () => {
+    setBusy(true)
+    setMessage(undefined)
+    const r = await settingsApi.saveToken(locale(), token)
+    setBusy(false)
+    if (r.ok) {
+      setToken('')
+      onSaved(r.view, r.login)
+    } else {
+      setMessage(r.message)
+    }
+  }
+  return (
+    <div className="mishu-add">
+      <label className="mishu-field">{t.sTokenPaste}
+        <input type="password" value={token} autoComplete="off" spellCheck={false} placeholder="ghp_…" onChange={(e) => { setToken(e.target.value); setMessage(undefined) }} />
+      </label>
+      <p className="mishu-hint">{t.sTokenHow}</p>
+      {message === undefined ? null : <div className="mishu-preview mishu-danger">{message}</div>}
+      <div className="mishu-actions">
+        <button type="button" className="mishu-btn" onClick={() => window.open(view.github.newTokenUrl, '_blank', 'noopener')}>{t.sTokenNew}</button>
+        <button type="button" className="mishu-btn primary" disabled={busy || token.trim() === ''} onClick={() => { void save() }}>{busy ? t.sTesting : t.sTokenSave}</button>
+        {onCancel === undefined ? null : <button type="button" className="mishu-btn" onClick={onCancel}>{t.sCancel}</button>}
+      </div>
     </div>
   )
 }
@@ -206,8 +260,9 @@ function AccountForm({ draft, view, lang, locale, openChat, onDone }: {
         <label className="mishu-field">{t.sUser}<input value={account.user ?? ''} placeholder={account.address ?? ''} autoComplete="off" onChange={e => set({ user: e.target.value })} /></label>
       </div>
       <label className="mishu-field">{t.sPassword}
-        <input type="password" value={password} autoComplete="new-password" placeholder={existing ? t.sPasswordKeep : ''} onChange={(e) => { setPassword(e.target.value); setMessage(undefined) }} />
+        <input type="password" value={password} autoComplete="new-password" placeholder={existing && view.secrets.available ? t.sPasswordKeep : ''} onChange={(e) => { setPassword(e.target.value); setMessage(undefined) }} />
       </label>
+      {view.secrets.available ? null : <p className="mishu-hint mishu-warn">{t.sPasswordTestOnly}</p>}
       {custom ? (
         <div className="mishu-row">
           <label className="mishu-field">{t.sHost}<input value={account.host ?? ''} onChange={e => set({ host: e.target.value })} /></label>
@@ -218,7 +273,12 @@ function AccountForm({ draft, view, lang, locale, openChat, onDone }: {
         <label className="mishu-field">{t.sSince}<input type="number" min={1} max={90} value={account.sinceDays ?? 14} onChange={e => set({ sinceDays: Number(e.target.value) })} /></label>
         <label className="mishu-check"><input type="checkbox" checked={account.enabled !== false} onChange={e => set({ enabled: e.target.checked })} />{t.sEnabled}</label>
       </div>
-      {message === undefined ? null : <div className={`mishu-preview ${message.ok ? '' : 'mishu-danger'}`}>{message.text}</div>}
+      {message === undefined ? null : (
+        <div className={`mishu-preview ${message.ok ? '' : 'mishu-danger'}`}>
+          {message.text}
+          {message.ok || !preset.supported ? null : <AskAI topic={{ kind: 'mail-setup', preset: preset.id, error: message.text }} lang={lang} locale={locale} openChat={openChat} compact />}
+        </div>
+      )}
       <div className="mishu-actions">
         <button type="button" className="mishu-btn" disabled={busy || !preset.supported} onClick={() => { void test() }}>{t.sTest}</button>
         <button type="button" className="mishu-btn primary" disabled={busy || !preset.supported} onClick={() => { void save() }}>{t.sSave}</button>

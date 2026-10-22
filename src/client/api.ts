@@ -48,7 +48,7 @@ export type AskTopic =
   | { kind: 'summary' }
   | { kind: 'github-error' }
   | { kind: 'mail-error'; accountId: number }
-  | { kind: 'mail-setup'; preset: string }
+  | { kind: 'mail-setup'; preset: string; error?: string }
 
 export interface AccountView {
   id: number
@@ -86,10 +86,11 @@ export interface SettingsView {
   }
   github: {
     tokenEnv: string
-    token: { found: true; from: 'env' | 'gh' } | { found: false; text: string }
+    token: { found: true; from: 'env' | 'keychain' | 'gh' } | { found: false; text: string }
+    newTokenUrl: string
     lastSync: { at: number; notifications: number; error?: { zh: string; en: string } } | null
   }
-  secrets: { kind: string; available: boolean }
+  secrets: { kind: string; available: boolean; why?: string }
   accounts: AccountView[]
   presets: PresetView[]
 }
@@ -100,6 +101,8 @@ export const settingsApi = {
   load: (lang: string) => post<{ view: SettingsView }>('/settings', { lang }),
   save: (lang: string, settings: Partial<SettingsView['settings']>) => post<{ view: SettingsView }>('/settings/save', { lang, settings }),
   testGithub: (lang: string) => post<{ login: string; from: string }>('/github/test', { lang }),
+  saveToken: (lang: string, token: string) => post<{ login: string; view: SettingsView }>('/github/token/save', { lang, token }),
+  deleteToken: (lang: string) => post<{ view: SettingsView }>('/github/token/delete', { lang }),
   saveMail: (lang: string, account: AccountDraft, password: string) => post<{ id: number; view: SettingsView }>('/mail/save', { lang, account, password }),
   testMail: (lang: string, account: AccountDraft, password: string) => post<{ unread: number }>('/mail/test', { lang, account, password }),
   deleteMail: (lang: string, id: number) => post<{ view: SettingsView }>('/mail/delete', { lang, id }),

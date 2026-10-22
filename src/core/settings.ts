@@ -11,7 +11,7 @@ import { MishuError, bi, type Lang } from './i18n.ts'
 import { resolveAccount, secretAccount, type MailAccount } from './mail/account.ts'
 import { MAIL_SOURCE } from './mail/sync.ts'
 import { CATEGORIES, type Category } from './recur.ts'
-import type { SecretStore } from './secrets.ts'
+import { secretFromEnv, type SecretStore } from './secrets.ts'
 import type { MishuStore } from './store.ts'
 
 export interface Defaults {
@@ -74,7 +74,9 @@ export function mailAccounts(store: MishuStore): MailAccount[] {
 /**
  * Add (no id) or update an account. A new password, when given, goes to the
  * keychain before the account is saved, so a failed keychain write leaves
- * nothing half-saved.
+ * nothing half-saved. Without a usable keychain the password is not kept
+ * anywhere: the account is saved and reads it from the environment variable
+ * shown on the settings page (`secretEnvName`).
  */
 export async function saveMailAccount(store: MishuStore, secrets: SecretStore, input: Partial<MailAccount>, password: string | undefined, now: number): Promise<MailAccount> {
   const accounts = mailAccounts(store)
@@ -82,8 +84,9 @@ export async function saveMailAccount(store: MishuStore, secrets: SecretStore, i
   if (input.id !== undefined && existing === undefined) throw new MishuError(bi(`没有 #${input.id} 这个邮箱账户`, `there is no mail account #${input.id}`))
   const id = existing?.id ?? (store.get<number>(NEXT_ID_KEY) ?? 1)
   const account = resolveAccount({ ...existing, ...input }, id)
-  if (password !== undefined && password !== '') await secrets.set(secretAccount(id), password)
-  else if (existing === undefined && await secrets.get(secretAccount(id)) === undefined) {
+  const keychain = (await secrets.status()).available
+  if (keychain && password !== undefined && password !== '') await secrets.set(secretAccount(id), password)
+  else if (keychain && existing === undefined && await secrets.get(secretAccount(id)) === undefined && secretFromEnv(secretAccount(id)) === undefined) {
     throw new MishuError(bi('新邮箱要填密码（授权码）', 'a new account needs its password (app password)'))
   }
   store.set(ACCOUNTS_KEY, existing === undefined ? [...accounts, account] : accounts.map(a => (a.id === id ? account : a)))

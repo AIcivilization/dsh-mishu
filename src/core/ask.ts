@@ -26,7 +26,7 @@ export type AskRequest =
   | { kind: 'summary' }
   | { kind: 'github-error' }
   | { kind: 'mail-error'; accountId: number }
-  | { kind: 'mail-setup'; preset: string }
+  | { kind: 'mail-setup'; preset: string; error?: string }
 
 export interface AskOptions {
   now: number
@@ -148,8 +148,8 @@ export function buildAsk(store: MishuStore, request: AskRequest, options: AskOpt
     case 'mail-setup': {
       const preset = presetById(request.preset)
       return zh
-        ? `我想让小秘书只读地查看我的「${preset.label.zh}」收件箱，需要开通 IMAP 并拿到客户端授权码（或应用专用密码）。请一步步教我怎么做，包括在网页上点哪里、要注意什么。\n\n小秘书给的说明：${preset.howTo.zh}\nIMAP 服务器：${preset.host || '（自己填）'}:${preset.port}`
-        : `I want my secretary to read my ${preset.label.en} inbox (read-only), which needs IMAP turned on and an app password. Walk me through it step by step, including where to click and what to watch out for.\n\nThe secretary's note: ${preset.howTo.en}\nIMAP server: ${preset.host || '(enter your own)'}:${preset.port}`
+        ? `我想让小秘书只读地查看我的「${preset.label.zh}」收件箱，需要开通 IMAP 并拿到客户端授权码（或应用专用密码）。请一步步教我怎么做，包括在网页上点哪里、要注意什么。\n\n小秘书给的说明：${preset.howTo.zh}\nIMAP 服务器：${preset.host || '（自己填）'}:${preset.port}${lines('\n测试连接时报错：', request.error)}`
+        : `I want my secretary to read my ${preset.label.en} inbox (read-only), which needs IMAP turned on and an app password. Walk me through it step by step, including where to click and what to watch out for.\n\nThe secretary's note: ${preset.howTo.en}\nIMAP server: ${preset.host || '(enter your own)'}:${preset.port}${lines('\nThe connection test said: ', request.error)}`
     }
   }
 }
