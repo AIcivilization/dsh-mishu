@@ -114,6 +114,11 @@ const zh = {
   sNeverChecked: '还没收过',
   sFeishu: '飞书',
   sComing: '即将接入',
+  ai: '+AI',
+  aiTitle: '在对话里问 AI：把这件事放进一个新对话的输入框，不会自动发送，你看过再按发送',
+  aiOpened: '已放进新对话的输入框，看过后按发送就行',
+  aiCopied: '已复制到剪贴板，粘贴到对话里就能问',
+  aiFailed: '没能打开对话：',
 }
 
 const en: typeof zh = {
@@ -223,6 +228,11 @@ const en: typeof zh = {
   sNeverChecked: 'Not checked yet',
   sFeishu: 'Feishu / Lark',
   sComing: 'Coming soon',
+  ai: '+AI',
+  aiTitle: 'Ask AI in a chat: puts this into a new chat\'s input box, unsent; read it, then press send',
+  aiOpened: 'Put into a new chat\'s input box; read it and press send',
+  aiCopied: 'Copied; paste it into a chat to ask',
+  aiFailed: 'Could not open a chat: ',
 }
 
 export const TEXT: Record<UiLang, typeof zh> = { zh, en }

@@ -9,7 +9,7 @@
  */
 
 import {
-  addSeries, CATEGORIES, dayOf, decode, describeSeries, errorText, REPEATS, resolveSeries, setStatusByUser, stopSeries, tickManual,
+  addSeries, CATEGORIES, dayOf, decode, describeSeries, detailText, errorText, REPEATS, resolveSeries, setStatusByUser, stopSeries, tickManual,
   type Category, type Lang, type MishuStore, type Repeat, type SeriesInput,
 } from '../core/index.ts'
 
@@ -67,6 +67,7 @@ export interface ToolDeps {
   leadDays: () => Record<Category, number>
   lang: () => Lang
   brief: () => string
+  markRead?: () => 'off' | 'shadow' | 'on'
   now?: () => number
 }
 
@@ -126,6 +127,21 @@ export async function registerTools(tools: { register(definition: unknown): unkn
     parameters: {},
     output: textResult,
     execute: async () => ({ text: deps.brief() }),
+  }))
+
+  tools.register(defineTool({
+    name: 'mishu_detail',
+    description: 'Look up one item on the secretary\'s board in full (the #number): what it is, where the problem is or why it was closed, the suggestion, the link, what the secretary did, and the notifications it came from. Read-only.',
+    parameters: {
+      id: { type: 'integer', required: true, description: 'Item number, e.g. 12 for #12' },
+    },
+    output: textResult,
+    execute: (args: { id: number }) => speak(deps.lang(), () => {
+      const lang = deps.lang()
+      const text = detailText(need(), Number(args.id), { now: now(), lang, markRead: deps.markRead?.() ?? 'shadow' })
+      if (text === undefined) throw new Error(lang === 'zh' ? `没有 #${args.id} 这一项` : `there is no item #${args.id}`)
+      return { text }
+    }),
   }))
 
   tools.register(defineTool({

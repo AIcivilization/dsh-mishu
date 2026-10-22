@@ -112,6 +112,7 @@ export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(c
       leadDays: () => runtime.settings().leadDays,
       lang: () => runtime.lang(),
       brief: () => runtime.brief(),
+      markRead: () => runtime.settings().markRead,
     }).catch(error => ctx.logger.warn(`dsh-mishu: tools not registered (${(error as Error).message})`))
     scoped.on('tools/pre-execute', async (exec, next) => {
       const decision = await next()

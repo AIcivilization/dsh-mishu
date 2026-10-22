@@ -7,12 +7,13 @@
  */
 
 import { useEffect, useState } from 'react'
+import { AskAI, type OpenChat } from './AskAI.tsx'
 import { settingsApi, type AccountDraft, type AccountView, type SettingsView } from './api.ts'
 import { TEXT, type UiLang } from './text.ts'
 
 const CATEGORIES = ['document', 'bill', 'birthday', 'renewal', 'other'] as const
 
-export function MishuSettings({ lang, locale }: { lang: UiLang; locale: () => string }) {
+export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale: () => string; openChat: OpenChat }) {
   const t = TEXT[lang]
   const [view, setView] = useState<SettingsView | undefined>()
   const [error, setError] = useState<string | undefined>()
@@ -109,13 +110,13 @@ export function MishuSettings({ lang, locale }: { lang: UiLang; locale: () => st
         <p className="mishu-hint">{t.sMailPrivacy}</p>
         <p className={view.secrets.available ? 'mishu-hint' : 'mishu-hint mishu-warn'}>{view.secrets.available ? t.sSecretsAt(secretKind) : t.sSecretsNone}</p>
         {view.accounts.length === 0 ? <p className="mishu-empty">{t.sNoAccounts}</p> : view.accounts.map(account => (
-          <AccountRow key={account.id} account={account} lang={lang} locale={locale}
+          <AccountRow key={account.id} account={account} lang={lang} locale={locale} openChat={openChat}
             onEdit={() => setEditing({ ...account })}
             onView={next => take(next)} />
         ))}
         {editing === undefined
           ? <button type="button" className="mishu-btn mishu-add-toggle" onClick={() => setEditing({ preset: 'qq', sinceDays: 14, enabled: true })}>{t.sAddAccount}</button>
-          : <AccountForm draft={editing} view={view} lang={lang} locale={locale} onDone={(next) => { setEditing(undefined); if (next !== undefined) take({ ok: true, view: next }, t.sSaved) }} />}
+          : <AccountForm draft={editing} view={view} lang={lang} locale={locale} openChat={openChat} onDone={(next) => { setEditing(undefined); if (next !== undefined) take({ ok: true, view: next }, t.sSaved) }} />}
       </section>
 
       <section className="mishu-panel">
@@ -126,8 +127,8 @@ export function MishuSettings({ lang, locale }: { lang: UiLang; locale: () => st
   )
 }
 
-function AccountRow({ account, lang, locale, onEdit, onView }: {
-  account: AccountView; lang: UiLang; locale: () => string; onEdit: () => void
+function AccountRow({ account, lang, locale, openChat, onEdit, onView }: {
+  account: AccountView; lang: UiLang; locale: () => string; openChat: OpenChat; onEdit: () => void
   onView: (result: { ok: true; view: SettingsView } | { ok: false; message: string }) => void
 }) {
   const t = TEXT[lang]
@@ -140,7 +141,10 @@ function AccountRow({ account, lang, locale, onEdit, onView }: {
     <div className="mishu-card">
       <div className="mishu-card-title">{account.label}{account.enabled ? '' : ` (${lang === 'zh' ? '已停用' : 'disabled'})`}</div>
       <div className="mishu-card-meta">{account.address} · {account.host}:{account.port}</div>
-      <div className={`mishu-card-note ${report?.error === undefined ? '' : 'mishu-danger'}`}>{status}</div>
+      <div className={`mishu-card-note ${report?.error === undefined ? '' : 'mishu-danger'}`}>
+        {status}
+        {report?.error === undefined ? null : <AskAI topic={{ kind: 'mail-error', accountId: account.id }} lang={lang} locale={locale} openChat={openChat} compact />}
+      </div>
       {account.hasPassword ? null : <div className="mishu-card-note mishu-warn">{t.sEnvHint(account.envName)}</div>}
       <div className="mishu-actions">
         <button type="button" className="mishu-btn" disabled={busy} onClick={() => { setBusy(true); void settingsApi.syncMail(locale(), account.id).then((r) => { setBusy(false); onView(r) }) }}>{busy ? t.sTesting : t.sCheckNow}</button>
@@ -153,8 +157,8 @@ function AccountRow({ account, lang, locale, onEdit, onView }: {
   )
 }
 
-function AccountForm({ draft, view, lang, locale, onDone }: {
-  draft: AccountDraft; view: SettingsView; lang: UiLang; locale: () => string; onDone: (view?: SettingsView) => void
+function AccountForm({ draft, view, lang, locale, openChat, onDone }: {
+  draft: AccountDraft; view: SettingsView; lang: UiLang; locale: () => string; openChat: OpenChat; onDone: (view?: SettingsView) => void
 }) {
   const t = TEXT[lang]
   const [account, setAccount] = useState<AccountDraft>(draft)
@@ -192,7 +196,10 @@ function AccountForm({ draft, view, lang, locale, onDone }: {
           {view.presets.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
       </label>
-      <p className={preset.supported ? 'mishu-hint' : 'mishu-hint mishu-danger'}>{preset.howTo}</p>
+      <p className={preset.supported ? 'mishu-hint' : 'mishu-hint mishu-danger'}>
+        {preset.howTo}
+        {preset.supported ? <AskAI topic={{ kind: 'mail-setup', preset: preset.id }} lang={lang} locale={locale} openChat={openChat} compact /> : null}
+      </p>
       <label className="mishu-field">{t.sAddress}<input type="email" value={account.address ?? ''} autoComplete="off" onChange={e => set({ address: e.target.value })} /></label>
       <div className="mishu-row">
         <label className="mishu-field">{t.sLabel}<input value={account.label ?? ''} onChange={e => set({ label: e.target.value })} /></label>

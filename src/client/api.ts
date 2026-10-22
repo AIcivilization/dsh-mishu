@@ -38,7 +38,17 @@ export const mishuApi = {
   detail: (lang: string, id: number) => post<{ detail: MatterDetail }>('/detail', { lang, id }),
   preview: (lang: string, item: NewItem) => post<{ text: string }>('/preview', { lang, item }),
   add: (lang: string, item: NewItem) => post<{ id: number; board: BoardData }>('/add', { lang, item }),
+  ask: (lang: string, ask: AskTopic) => post<{ prompt: string }>('/ask', { lang, ask }),
 }
+
+/** What a "+AI" button asks about. */
+export type AskTopic =
+  | { kind: 'matter'; id: number }
+  | { kind: 'series'; id: number }
+  | { kind: 'summary' }
+  | { kind: 'github-error' }
+  | { kind: 'mail-error'; accountId: number }
+  | { kind: 'mail-setup'; preset: string }
 
 export interface AccountView {
   id: number

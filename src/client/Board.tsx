@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { mishuApi, type BoardCard, type BoardData, type CardAction, type MatterDetail, type NewItem } from './api.ts'
+import { AskAI, type OpenChat } from './AskAI.tsx'
 import { MishuSettings } from './Settings.tsx'
 import { TEXT, uiLang, type UiLang } from './text.ts'
 
@@ -61,7 +62,7 @@ function saveWidths(widths: [number, number, number]): void {
   }
 }
 
-export function MishuBoard({ locale }: { locale: () => string }) {
+export function MishuBoard({ locale, openChat }: { locale: () => string; openChat: OpenChat }) {
   const [board, setBoard] = useState<BoardData | undefined>()
   const [error, setError] = useState<string | undefined>()
   const [busy, setBusy] = useState(false)
@@ -187,6 +188,7 @@ export function MishuBoard({ locale }: { locale: () => string }) {
       locale={locale}
       busy={busy}
       label={label}
+      openChat={openChat}
       onAct={(action) => { void act(item, action) }}
       onDragStart={() => { dragged.current = { card: item, from: column } }}
       onDragEnd={() => { dragged.current = undefined; setDropOn(undefined) }}
@@ -242,15 +244,23 @@ export function MishuBoard({ locale }: { locale: () => string }) {
           </div>
         </div>
         <div className="mishu-sources">
-          <span><i className={`mishu-dot ${board.sources.github.state}`} />{board.sources.github.text}</span>
-          {board.sources.mail.map(m => <span key={m.id}><i className={`mishu-dot ${m.state}`} />{m.text}</span>)}
+          <span>
+            <i className={`mishu-dot ${board.sources.github.state}`} />{board.sources.github.text}
+            {board.sources.github.state === 'error' ? <AskAI topic={{ kind: 'github-error' }} lang={lang} locale={locale} openChat={openChat} compact /> : null}
+          </span>
+          {board.sources.mail.map(m => (
+            <span key={m.id}>
+              <i className={`mishu-dot ${m.state}`} />{m.text}
+              {m.state === 'error' ? <AskAI topic={{ kind: 'mail-error', accountId: m.id }} lang={lang} locale={locale} openChat={openChat} compact /> : null}
+            </span>
+          ))}
           <button type="button" className="mishu-btn" disabled={syncing} onClick={() => { void sync() }}>{syncing ? t.syncing : t.sync}</button>
         </div>
       </div>
-      {tab === 'settings' ? <MishuSettings lang={lang} locale={locale} /> : null}
+      {tab === 'settings' ? <MishuSettings lang={lang} locale={locale} openChat={openChat} /> : null}
       {tab === 'settings' ? null : <>
       {error === undefined ? null : <div className="mishu-error">{t.failed}{error}</div>}
-      <p className="mishu-summary">{board.summary}</p>
+      <p className="mishu-summary">{board.summary} <AskAI topic={{ kind: 'summary' }} lang={lang} locale={locale} openChat={openChat} compact /></p>
 
       <div className="mishu-metrics">
         <div className="mishu-metric">
@@ -309,6 +319,7 @@ interface CardProps {
   locale: () => string
   busy: boolean
   label: Record<CardAction, string>
+  openChat: OpenChat
   onAct: (action: CardAction) => void
   onDragStart: () => void
   onDragEnd: () => void
@@ -319,7 +330,7 @@ interface CardProps {
  * problem is and what to do. On "done for you" it stays short, with a
  * "What happened" button that opens the full story.
  */
-function Card({ item, column, lang, locale, busy, label, onAct, onDragStart, onDragEnd }: CardProps) {
+function Card({ item, column, lang, locale, busy, label, openChat, onAct, onDragStart, onDragEnd }: CardProps) {
   const t = TEXT[lang]
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState<MatterDetail | { error: string } | undefined>()
@@ -383,6 +394,7 @@ function Card({ item, column, lang, locale, busy, label, onAct, onDragStart, onD
         </div>
       ) : null}
       <div className="mishu-actions">
+        {column === 'handle' ? <AskAI topic={item.target === 'series' ? { kind: 'series', id: item.id } : { kind: 'matter', id: item.id }} lang={lang} locale={locale} openChat={openChat} /> : null}
         {item.actions.map((action, index) => (
           <button
             key={action}
@@ -399,6 +411,7 @@ function Card({ item, column, lang, locale, busy, label, onAct, onDragStart, onD
             {open ? t.hide : compact ? t.explainDone : t.detail}
           </button>
         ) : null}
+        {column === 'handle' ? null : <AskAI topic={item.target === 'series' ? { kind: 'series', id: item.id } : { kind: 'matter', id: item.id }} lang={lang} locale={locale} openChat={openChat} compact />}
       </div>
     </div>
   )

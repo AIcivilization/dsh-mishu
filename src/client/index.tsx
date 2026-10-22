@@ -16,6 +16,7 @@ const NS = 'dsh-mishu'
 
 interface ClientContext {
   effect(fn: () => () => void, label?: string): void
+  inject(deps: string[], callback: (ctx: ClientContext & { uiWorkspace: WorkspaceLike }) => void): void
   locale: {
     register(ns: string, dictionaries: Record<string, Record<string, string>>): () => void
     bind(ns: string): (key: string) => string
@@ -26,6 +27,16 @@ interface ClientContext {
     register(definition: Record<string, unknown>, component: unknown): () => void
   }
 }
+
+interface WorkspaceLike {
+  startSession(workspaceId?: string, options?: { prompt?: string; clearPreviousDraft?: boolean }): void
+}
+
+/**
+ * Opens a new chat with `prompt` in its input box, unsent. Set while DSH's
+ * workspace service is available; without it "+AI" falls back to the clipboard.
+ */
+let openChat: ((prompt: string) => void) | undefined
 
 /** Clipboard-with-check outline; drawn inline so it works in every DSH release. */
 function MishuIcon({ size }: { size: number }) {
@@ -51,11 +62,17 @@ export function apply(ctx: ClientContext): void {
 
   const t = ctx.locale.bind(NS)
   const locale = () => ctx.locale.getSnapshot().active
+  ctx.inject(['uiWorkspace'], (workspaceCtx) => {
+    workspaceCtx.effect(() => {
+      openChat = prompt => workspaceCtx.uiWorkspace.startSession(undefined, { prompt, clearPreviousDraft: true })
+      return () => { openChat = undefined }
+    }, 'dsh-mishu: +AI opens a chat')
+  })
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main',
     key: PANEL_ID,
     locale: NS,
-    inject: () => ({ locale }),
+    inject: () => ({ locale, openChat: (prompt: string) => (openChat === undefined ? false : (openChat(prompt), true)) }),
   }, MishuBoard))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
     name: 'sidebar.panellist',

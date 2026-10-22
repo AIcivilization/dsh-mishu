@@ -66,6 +66,8 @@
 - **我记着**：说过"明天再说"的事，以及还没到提醒时间的交代。底部可以直接交代新的事，填写时会实时显示小秘书理解成了什么。
 - **替你办了**：最近 7 天关掉的事，按理由分组。点"怎么回事"能看到它是什么、为什么关掉（附证据链接）、小秘书做了什么、来自哪几条通知。判错了就点"恢复"。
 
+**+AI**：看不明白就点彩色的"+AI"。它会开一个新对话，把这件事的说明、链接和相关通知放进输入框（不会自动发送），你看过、补上自己的问题再按发送。看板上的每张卡片、顶部总结、来源报错、设置页里各邮箱服务商的开通说明都有这个按钮。对话里的 AI 可以用 `mishu_detail` 查一件事的完整记录；要改状态时会先问你。
+
 卡片可以拖动：拖到"替你办了"就是办完，拖到"我记着"就是明天再提醒，从"我记着"拖回"要你处理"就是现在处理。三栏之间的分隔条也能拖动调宽度，双击恢复等宽。
 
 **设置**：点页面顶部的"设置"：语言、各类别提前几天提醒、GitHub（开关、token 从哪来、测试连接、在 GitHub 上标已读的方式）、邮箱账户（添加、测试连接、现在收一次、编辑、删除）。飞书即将接入。
@@ -83,7 +85,7 @@
 
 英文命令也能用：`sync`、`done`、`dismiss`、`reopen`、`closed`、`series`、`stop`、`help`。
 
-agent 可用的工具：`mishu_add`（交代，需要你审批）、`mishu_list`、`mishu_update`、`mishu_stop`。
+agent 可用的工具：`mishu_add`（交代，需要你审批）、`mishu_list`、`mishu_detail`、`mishu_update`、`mishu_stop`。
 
 ### 不会做的事
 
@@ -187,6 +189,8 @@ Filter the board by source: All, GitHub, Mail, Noted.
 - **Keeping for you**: things you put off until tomorrow, and things you told it that are not due for a reminder yet. Add a new one at the bottom, with a live preview of what was understood.
 - **Done for you**: what was closed in the last 7 days, grouped by reason. "What happened" shows what it was, why it was closed (with the evidence link), what the secretary did and which notifications it came from. Reopen any that are wrong.
 
+**+AI**: when something is unclear, press the colourful "+AI". It opens a new chat with the item's explanation, link and related notifications in the input box — unsent — so you can read it, add your question and press send. Every card, the summary, source errors and each mail provider's setup note have one. In that chat the AI can use `mishu_detail` to look an item up in full, and asks you before changing anything.
+
 Cards can be dragged: onto "Done for you" to mark done, onto "Keeping for you" to snooze until tomorrow, from "Keeping for you" back to "To handle" to handle it now. The dividers between the columns can be dragged too; double-click one to make the columns equal.
 
 **Settings**: the "Settings" tab at the top of the page: language, warning days per category, GitHub (on/off, where the token comes from, connection test, how to mark read), mail accounts (add, test, check now, edit, delete). Feishu / Lark is coming.
@@ -204,7 +208,7 @@ Cards can be dragged: onto "Done for you" to mark done, onto "Keeping for you" t
 
 Chinese commands work too: `同步`, `完成`, `忽略`, `恢复`, `已关闭`, `交代`, `停止`, `帮助`.
 
-Tools for the agent: `mishu_add` (needs your approval), `mishu_list`, `mishu_update`, `mishu_stop`.
+Tools for the agent: `mishu_add` (needs your approval), `mishu_list`, `mishu_detail`, `mishu_update`, `mishu_stop`.
 
 ### What it will not do
 

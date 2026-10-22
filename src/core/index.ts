@@ -8,6 +8,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { bi, type Bi } from './i18n.ts'
 
+export { buildAsk, detailText, type AskRequest } from './ask.ts'
 export { buildBoard, buildDetail, type BoardCard, type BoardData, type CardAction, type DoneGroup, type MatterDetail } from './board.ts'
 export type { CardExplain } from './explain.ts'
 export { renderBrief, renderClosed, renderMatter, reasonLabel, sortOpen, type BriefOptions } from './brief.ts'

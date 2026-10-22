@@ -11,10 +11,10 @@
  */
 
 import {
-  addDays, addSeries, buildBoard, buildDetail, dayOf, deleteMailAccount, describeMailError, MishuError, describeSeries, detectLang, errorText, GitHubClient,
+  addDays, addSeries, buildAsk, buildBoard, buildDetail, dayOf, deleteMailAccount, describeMailError, MishuError, describeSeries, detectLang, errorText, GitHubClient,
   MAIL_PRESETS, mailReportKey, resolveGithubToken, resolveSeries, saveMailAccount, saveSettings, secretAccount, secretEnvName,
   setStatusByUser, snoozeByUser, stopSeries, tickManual,
-  type BoardData, type Category, type Lang, type MailAccount, type MailSyncReport, type MishuStore, type SeriesInput, type UserSettings,
+  type AskRequest, type BoardData, type Category, type Lang, type MailAccount, type MailSyncReport, type MishuStore, type SeriesInput, type UserSettings,
 } from '../core/index.ts'
 import { resolveAccount } from '../core/mail/account.ts'
 import type { Runtime } from './runtime.ts'
@@ -175,6 +175,22 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       const resolved = resolveSeries(seriesInput(body.item), runtime.settings().leadDays)
       const series = addSeries(store, resolved, clock())
       return { id: series.id, board: board(store, lang) }
+    },
+
+    /** "+AI": the text for a new chat's input box, built from what the board shows. */
+    '/ask': async (body) => {
+      const lang = langOf(body)
+      const ask = (body.ask ?? {}) as Partial<AskRequest> & Record<string, unknown>
+      const kinds = ['matter', 'series', 'summary', 'github-error', 'mail-error', 'mail-setup']
+      if (typeof ask.kind !== 'string' || !kinds.includes(ask.kind)) throw new ApiError(lang === 'zh' ? '不认识要问什么' : 'Unknown question')
+      const request = {
+        kind: ask.kind,
+        ...ask.id === undefined ? {} : { id: Number(ask.id) },
+        ...ask.accountId === undefined ? {} : { accountId: Number(ask.accountId) },
+        ...ask.preset === undefined ? {} : { preset: String(ask.preset) },
+      } as AskRequest
+      const prompt = buildAsk(need(lang), request, { now: clock(), lang, markRead: runtime.settings().markRead, accounts: runtime.accounts() })
+      return { prompt }
     },
 
     // ── settings ──────────────────────────────────────────

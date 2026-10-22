@@ -90,5 +90,13 @@ export const STYLES = `
 .mishu-grid5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:8px}
 .mishu-check{display:flex;align-items:center;gap:6px;font-size:13px;margin:4px 0 8px;color:${TEXT}}
 .mishu-ok{padding:6px 10px;border-radius:8px;border:1px solid ${OK};color:${OK};font-size:12px}
+.mishu-ai-wrap{display:inline-flex;align-items:center;gap:6px;vertical-align:middle;flex-wrap:wrap}
+.mishu-ai{font:inherit;font-size:12px;font-weight:700;letter-spacing:.02em;color:#fff;border:0;border-radius:999px;padding:3px 11px;cursor:pointer;background:linear-gradient(120deg,#6d5dfc 0%,#c850c0 50%,#ff8a3d 100%);background-size:160% 100%;transition:background-position .3s,transform .1s}
+.mishu-ai:hover{background-position:100% 0}
+.mishu-ai:active{transform:scale(.97)}
+.mishu-ai:disabled{opacity:.6;cursor:default}
+.mishu-ai.compact{font-size:11px;padding:1px 8px;margin-left:4px}
+.mishu-ai:focus-visible{outline:2px solid ${ACCENT};outline-offset:2px}
+.mishu-ai-note{font-size:11px;color:${MUTED}}
 @media (max-width:820px){.mishu-columns{grid-template-columns:1fr;gap:12px}.mishu-divider{display:none}.mishu-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.mishu-grid5{grid-template-columns:repeat(2,minmax(0,1fr))}}
 `
