@@ -73,7 +73,14 @@
 
 卡片可以拖动：拖到"替你办了"就是办完，拖到"我记着"就是明天再提醒，从"我记着"拖回"要你处理"就是现在处理。三栏之间的分隔条也能拖动调宽度，双击恢复等宽。
 
-**设置**：点页面顶部的"设置"：语言、各类别提前几天提醒、GitHub（开关、token 从哪来、测试连接、在 GitHub 上标已读的方式）、邮箱账户（添加、测试连接、现在收一次、编辑、删除）。飞书即将接入。
+**设置**：点页面顶部的"设置"，按秘书的活分成四块：① 它看哪里（GitHub、邮箱）；② 什么事要告诉你（哪些算急事、各类别提前几天）；③ 什么时候、怎么告诉你（主动提醒，见下）；④ 能替你办什么（在 GitHub 上标已读的方式；邮件一律只读）。最后是语言和密码存在哪。
+
+**主动提醒**：不用打开看板也能知道。
+- 每日简报：每天到点（默认 09:00）发一份"要你处理"和"快到期"的清单；没事就不发。
+- 急事立刻提醒：有人请你 review、@ 你、把事分配给你；会议邀请；你交代的事到了当天或已经过期。每件只提醒一次；刚打开提醒时，看板上已有的不算新消息。
+- 免打扰（默认 22:00 到 08:00）：这段时间不发，期间出现的急事等结束后一起发。
+- 时间按你浏览器所在的时区算，DSH 跑在别的时区的服务器上也不会错。
+- 发到：这台电脑的系统通知（macOS、Windows、Linux 桌面；服务器上没有），以及飞书群机器人（建一个只有你的群、加一个自定义机器人，把 Webhook 地址粘贴过来；支持签名校验）。飞书的地址和密钥当密码存；提醒内容会经过飞书的服务器。
 
 **重启 DSH**：页面顶部"设置"后面的按键。重装或升级插件后点它，桌面版会按正常方式退出（有任务在跑时会先问你），再自动打开。用 dsh-vps 装在服务器上的 DSH，由 dsh-gate 网关托管：点了之后 DSH 正常退出，网关几秒内把它重新拉起，页面断开一会儿后自动刷新。直接用 `dsh` 命令启动的 DSH 没法从页面重启（新的登录地址只会打印在那个终端里），按键会告诉你回终端按 Ctrl+C 再运行一次。Windows 和 Linux 桌面版的重启还没在真机上测过。
 
@@ -208,7 +215,16 @@ Filter the board by source: All, GitHub, Mail, Noted.
 
 Cards can be dragged: onto "Done for you" to mark done, onto "Keeping for you" to snooze until tomorrow, from "Keeping for you" back to "To handle" to handle it now. The dividers between the columns can be dragged too; double-click one to make the columns equal.
 
-**Settings**: the "Settings" tab at the top of the page: language, warning days per category, GitHub (on/off, where the token comes from, connection test, how to mark read), mail accounts (add, test, check now, edit, delete). Feishu / Lark is coming.
+**Settings**: the "Settings" tab at the top of the page: language, warning days per category, GitHub (on/off, where the token comes from, connection test, how to mark read), mail accounts (add, test, check now, edit, delete).
+
+The settings follow the secretary's job in four parts: 1. where it looks (GitHub, mail); 2. what to tell you about (what counts as urgent, warning days per category); 3. when and how to tell you (reminders, below); 4. what it may do for you (marking read on GitHub; mail is always read-only). Then language and where secrets are kept.
+
+**Reminders**, without opening the board:
+- Daily brief: at its time (09:00 by default) a list of what needs you and what is coming up; nothing is sent when there is nothing.
+- Urgent items right away: a review requested, a mention, an assignment; a meeting invitation; something you told it that is due today or overdue. Each is sent once; what is already on the board when reminders start is not news.
+- Quiet hours (22:00 to 08:00 by default): nothing is sent; urgent items from then come when they end.
+- Times follow your browser's time zone, so DSH on a server in another zone still gets them right.
+- Sent to this computer's notifications (macOS, Windows, a Linux desktop; a server has none) and to a Feishu / Lark group bot (a group of just you, a custom bot, its webhook address pasted in; signature verification supported). The bot's address and secret are kept like passwords; what reminders say passes through Feishu's servers.
 
 **Restart DSH**: the button after "Settings" at the top of the page. After reinstalling or upgrading plugins, click it: the desktop app quits the normal way (asking first if a task is running) and opens again. On a server set up with dsh-vps, DSH runs under the dsh-gate gateway: DSH exits cleanly, the gateway starts it again within seconds, and the page reloads once it is back. DSH started directly with the `dsh` command cannot be restarted from the page (its new sign-in address is printed only in that terminal), so the button tells you to press Ctrl+C there and run it again. Restarting the Windows and Linux desktop apps is not yet tested on real machines.
 

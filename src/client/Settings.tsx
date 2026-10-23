@@ -1,5 +1,7 @@
 /**
- * The settings page: language and warning times, GitHub, mail accounts.
+ * The settings page, as the secretary's job: where it looks (GitHub,
+ * mail), what to tell you about, when and how to tell you, what it may
+ * do for you; then language and where secrets are kept.
  *
  * Passwords are typed here and sent once to the host, which hands them
  * straight to the system keychain; the page never receives one back. The
@@ -10,6 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AskAI, type OpenChat } from './AskAI.tsx'
 import { settingsApi, type AccountDraft, type AccountView, type DeviceView, type SettingsView } from './api.ts'
 import { Modal } from './Modal.tsx'
+import { NotifySection } from './Notify.tsx'
 import { TEXT, type UiLang } from './text.ts'
 
 const CATEGORIES = ['document', 'bill', 'birthday', 'renewal', 'other'] as const
@@ -46,33 +49,41 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
   const token = view.github.token
   const secretKind = t.secretKinds[view.secrets.kind] ?? view.secrets.kind
 
+  const markRead = (
+    <>
+      <label className="mishu-field">{t.sMarkRead}
+        <select value={view.settings.markRead} onChange={(e) => {
+          const value = e.target.value as SettingsView['settings']['markRead']
+          if (value === 'on') setConfirmOn(true)
+          else void save({ markRead: value })
+        }}>
+          <option value="off">{t.sMarkOff}</option>
+          <option value="shadow">{t.sMarkShadow}</option>
+          <option value="on">{t.sMarkOn}</option>
+        </select>
+      </label>
+      {confirmOn ? (
+        <div className="mishu-banner">
+          <div>{t.sMarkConfirm}</div>
+          <div className="mishu-actions">
+            <button type="button" className="mishu-btn primary" onClick={() => { setConfirmOn(false); void save({ markRead: 'on' }) }}>{t.sConfirm}</button>
+            <button type="button" className="mishu-btn" onClick={() => setConfirmOn(false)}>{t.sCancel}</button>
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
+
   return (
     <div className="mishu-settings">
       {error === undefined ? null : <div className="mishu-error">{t.failed}{error}</div>}
       {note === undefined ? null : <div className="mishu-ok">{note}</div>}
 
       <section className="mishu-panel">
-        <h2>{t.sGeneral}</h2>
-        <label className="mishu-field">{t.sLanguage}
-          <select value={view.settings.language} onChange={e => { void save({ language: e.target.value as SettingsView['settings']['language'] }) }}>
-            <option value="auto">{t.sLanguageAuto}</option>
-            <option value="zh">中文</option>
-            <option value="en">English</option>
-          </select>
-        </label>
-        <div className="mishu-field">{t.sLead}</div>
-        <div className="mishu-grid5">
-          {CATEGORIES.map(c => (
-            <label key={c} className="mishu-field">{t.categories[c]}
-              <input type="number" min={0} max={366} value={lead[c] ?? 0} onChange={e => setLead({ ...lead, [c]: Number(e.target.value) })} />
-            </label>
-          ))}
-        </div>
-        <button type="button" className="mishu-btn primary" onClick={() => { void save({ leadDays: lead }) }}>{t.sSave}</button>
-      </section>
+        <h2>{t.bSources}</h2>
+        <p className="mishu-hint">{t.bSourcesHint}</p>
 
-      <section className="mishu-panel">
-        <h2>{t.sGithub}</h2>
+        <h3>{t.sGithub}</h3>
         <label className="mishu-check"><input type="checkbox" checked={view.settings.githubEnabled} onChange={e => { void save({ githubEnabled: e.target.checked }) }} />{t.sGithubOn}</label>
         <div className="mishu-row-explain">
           <span className="mishu-row-label">{t.sToken}</span>
@@ -98,36 +109,9 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
         {!token.found || pasting
           ? <GithubConnect view={view} lang={lang} locale={locale} onSaved={(next, login) => { setPasting(false); setGithubTest(t.sTokenSaved(login)); take({ ok: true, view: next }) }} onCancel={token.found ? () => setPasting(false) : undefined} />
           : null}
-        <label className="mishu-field">{t.sMarkRead}
-          <select value={view.settings.markRead} onChange={(e) => {
-            const value = e.target.value as SettingsView['settings']['markRead']
-            if (value === 'on') setConfirmOn(true)
-            else void save({ markRead: value })
-          }}>
-            <option value="off">{t.sMarkOff}</option>
-            <option value="shadow">{t.sMarkShadow}</option>
-            <option value="on">{t.sMarkOn}</option>
-          </select>
-        </label>
-        {confirmOn ? (
-          <div className="mishu-banner">
-            <div>{t.sMarkConfirm}</div>
-            <div className="mishu-actions">
-              <button type="button" className="mishu-btn primary" onClick={() => { setConfirmOn(false); void save({ markRead: 'on' }) }}>{t.sConfirm}</button>
-              <button type="button" className="mishu-btn" onClick={() => setConfirmOn(false)}>{t.sCancel}</button>
-            </div>
-          </div>
-        ) : null}
-      </section>
 
-      <section className="mishu-panel">
-        <h2>{t.sMail}</h2>
+        <h3>{t.sMail}</h3>
         <p className="mishu-hint">{t.sMailPrivacy}</p>
-        <p className={view.secrets.available && view.secrets.file === undefined ? 'mishu-hint' : 'mishu-hint mishu-warn'}>
-          {!view.secrets.available ? t.sSecretsNone(view.secrets.why ?? secretKind)
-            : view.secrets.file !== undefined ? t.sSecretsFile(view.secrets.file.path, view.secrets.file.why)
-              : t.sSecretsAt(secretKind)}
-        </p>
         {view.accounts.length === 0 ? <p className="mishu-empty">{t.sNoAccounts}</p> : view.accounts.map(account => (
           <AccountRow key={account.id} account={account} secretsOk={view.secrets.available} lang={lang} locale={locale} openChat={openChat}
             onEdit={() => setEditing({ ...account })}
@@ -141,8 +125,44 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
       </section>
 
       <section className="mishu-panel">
-        <h2>{t.sFeishu}</h2>
-        <p className="mishu-hint">{t.sComing}</p>
+        <h2>{t.bWhat}</h2>
+        <p className="mishu-hint">{t.bUrgentRule}</p>
+        <div className="mishu-field">{t.sLead}</div>
+        <div className="mishu-grid5">
+          {CATEGORIES.map(c => (
+            <label key={c} className="mishu-field">{t.categories[c]}
+              <input type="number" min={0} max={366} value={lead[c] ?? 0} onChange={e => setLead({ ...lead, [c]: Number(e.target.value) })} />
+            </label>
+          ))}
+        </div>
+        <button type="button" className="mishu-btn primary" onClick={() => { void save({ leadDays: lead }) }}>{t.sSave}</button>
+      </section>
+
+      <section className="mishu-panel">
+        <h2>{t.bWhen}</h2>
+        <NotifySection view={view} lang={lang} locale={locale} take={take} />
+      </section>
+
+      <section className="mishu-panel">
+        <h2>{t.bDo}</h2>
+        {markRead}
+        <p className="mishu-hint">{t.bMailReadOnly}</p>
+      </section>
+
+      <section className="mishu-panel">
+        <h2>{t.sGeneral}</h2>
+        <label className="mishu-field">{t.sLanguage}
+          <select value={view.settings.language} onChange={e => { void save({ language: e.target.value as SettingsView['settings']['language'] }) }}>
+            <option value="auto">{t.sLanguageAuto}</option>
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <p className={view.secrets.available && view.secrets.file === undefined ? 'mishu-hint' : 'mishu-hint mishu-warn'}>
+          {!view.secrets.available ? t.sSecretsNone(view.secrets.why ?? secretKind)
+            : view.secrets.file !== undefined ? t.sSecretsFile(view.secrets.file.path, view.secrets.file.why)
+              : t.sSecretsAt(secretKind)}
+        </p>
       </section>
     </div>
   )

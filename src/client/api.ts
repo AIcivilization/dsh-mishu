@@ -98,6 +98,12 @@ export interface SettingsView {
   }
   secrets: { kind: string; available: boolean; why?: string; file?: { path: string; why: string } }
   accounts: AccountView[]
+  notify: {
+    settings: NotifySettingsView
+    channels: Array<{ id: 'desktop' | 'feishu'; enabled: boolean; available: boolean; why?: string }>
+    feishu: { configured: boolean }
+    last: { at: number; kind: 'brief' | 'urgent' | 'test'; count: number; results: Array<{ channel: string; ok: boolean; error?: string }> } | null
+  }
   presets: PresetView[]
 }
 
@@ -106,6 +112,14 @@ export type AccountDraft = Partial<Omit<AccountView, 'hasPassword' | 'envName' |
 export const restartApi = {
   info: (lang: string) => post<{ supported: true } | { supported: false; why: string }>('/restart/info', { lang }),
   restart: (lang: string) => post<{ restarting: true; reconnect?: boolean }>('/restart', { lang }),
+}
+
+export interface NotifySettingsView {
+  brief: { enabled: boolean; time: string }
+  urgent: boolean
+  quiet: { enabled: boolean; from: string; to: string }
+  timeZone: string
+  channels: { desktop: boolean; feishu: boolean }
 }
 
 export type DeviceView =
@@ -120,6 +134,10 @@ export const settingsApi = {
   testGithub: (lang: string) => post<{ login: string; from: string }>('/github/test', { lang }),
   saveToken: (lang: string, token: string) => post<{ login: string; view: SettingsView }>('/github/token/save', { lang, token }),
   deleteToken: (lang: string) => post<{ view: SettingsView }>('/github/token/delete', { lang }),
+  saveNotify: (lang: string, notify: Partial<NotifySettingsView>) => post<{ view: SettingsView }>('/notify/save', { lang, notify }),
+  testNotify: (lang: string, channel: string) => post<{ sent: true }>('/notify/test', { lang, channel }),
+  saveFeishu: (lang: string, webhook: string, secret: string) => post<{ view: SettingsView }>('/feishu/save', { lang, webhook, secret }),
+  deleteFeishu: (lang: string) => post<{ view: SettingsView }>('/feishu/delete', { lang }),
   deviceStart: (lang: string) => post<{ login: DeviceView }>('/github/device/start', { lang }),
   deviceStatus: (lang: string) => post<{ login: DeviceView; view?: SettingsView }>('/github/device/status', { lang }),
   deviceCancel: (lang: string) => post<{ login: DeviceView }>('/github/device/cancel', { lang }),

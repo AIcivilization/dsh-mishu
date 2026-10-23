@@ -106,6 +106,9 @@ export const STYLES = `
 .mishu-settings{display:flex;flex-direction:column;gap:12px;max-width:760px}
 .mishu-panel{background:${LAYER1};border-radius:12px;padding:12px 14px}
 .mishu-panel h2{font-size:14px;font-weight:600;margin:0 0 8px}
+.mishu-panel h3{font-size:13px;font-weight:600;margin:14px 0 6px}
+.mishu-notify-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.mishu-notify-row input[type=time]{font:inherit;font-size:13px;color:${TEXT};background:${LAYER2};border:1px solid ${LINE_STRONG};border-radius:6px;padding:2px 6px}
 .mishu-grid5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:8px}
 .mishu-check{display:flex;align-items:center;gap:6px;font-size:13px;margin:4px 0 8px;color:${TEXT}}
 .mishu-ok{padding:6px 10px;border-radius:8px;border:1px solid ${OK};color:${OK};font-size:12px}

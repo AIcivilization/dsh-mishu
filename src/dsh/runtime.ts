@@ -7,9 +7,9 @@
 
 import {
   dayOf, detectLang, effectiveSettings, GitHubClient, ImapFetcher, mailAccounts, mailReportKey, renderBrief,
-  FileSecrets, GithubDeviceLogin, KeychainOrFile, mishuPaths, resolveGithubToken, secretAccount, secretFromEnv, syncGithub, syncMail, systemSecrets, tickManual, bi,
+  buildBoard, DesktopChannel, FeishuChannel, FileSecrets, GithubDeviceLogin, KeychainOrFile, notifySettings, notifyTick, mishuPaths, resolveGithubToken, secretAccount, secretFromEnv, syncGithub, syncMail, systemSecrets, tickManual, bi,
   type Defaults, type GithubSyncReport, type Lang, type MailAccount, type MailFetcher, type MailSyncReport, type MishuStore,
-  restartPlan, scheduleRestart, type RestartPlan, type RestartStarted, type SecretStore, type TokenResult,
+  restartPlan, scheduleRestart, type Channel, type ChannelId, type NotifyReport, type RestartPlan, type RestartStarted, type SecretStore, type TokenResult,
 } from '../core/index.ts'
 import type { MishuConfig } from './config.ts'
 
@@ -22,6 +22,9 @@ export class Runtime {
   readonly fetcher: MailFetcher
   private readonly logger: Logger
   private syncing: Promise<void> | undefined
+  /** Where reminders can go; tests swap them for recorders. */
+  channels: Record<ChannelId, Channel>
+  private notifying: Promise<NotifyReport[]> | undefined
   /** "Sign in with GitHub" in progress, if any; tests swap it to replay GitHub. */
   githubLogin: GithubDeviceLogin
   /** How DSH restarts; tests swap it so they never restart anything. */
@@ -37,6 +40,7 @@ export class Runtime {
     this.logger = logger
     this.secrets = secrets
     this.githubLogin = new GithubDeviceLogin({ clientId: config.github.clientId, secrets })
+    this.channels = { desktop: new DesktopChannel(), feishu: new FeishuChannel(secrets) }
     this.fetcher = fetcher
   }
 
@@ -127,6 +131,38 @@ export class Runtime {
     return report
   }
 
+  /** The channels that are turned on and work on this computer. */
+  async activeChannels(): Promise<Channel[]> {
+    const store = this.store
+    if (store === undefined) return []
+    const enabled = notifySettings(store).channels
+    const active: Channel[] = []
+    for (const id of Object.keys(enabled) as ChannelId[]) {
+      if (enabled[id] && (await this.channels[id].status()).available) active.push(this.channels[id])
+    }
+    return active
+  }
+
+  /** The board as the brief describes it. */
+  board(now: number, lang: Lang = this.lang()) {
+    const settings = this.settings()
+    return buildBoard(this.store!, { now, lang, github: { enabled: settings.githubEnabled, markRead: settings.markRead }, mailAccounts: this.accounts() })
+  }
+
+  /** Send what is due now: urgent items, the daily brief. One at a time. */
+  notify(now: number = Date.now()): Promise<NotifyReport[]> {
+    const store = this.store
+    if (store === undefined) return Promise.resolve([])
+    this.notifying ??= (async () => {
+      const lang = this.lang()
+      return notifyTick({ store, now, lang, channels: await this.activeChannels(), board: () => this.board(now, lang) })
+    })().catch((error) => {
+      this.logger.warn(`dsh-mishu: reminders failed (${(error as Error).message})`)
+      return []
+    }).finally(() => { this.notifying = undefined })
+    return this.notifying
+  }
+
   /** Every source once; concurrent callers share the sync in flight. */
   syncAll(): Promise<void> {
     const store = this.store
@@ -136,6 +172,8 @@ export class Runtime {
       for (const account of this.accounts().filter(a => a.enabled)) {
         await this.syncMailAccount(account).catch(error => this.logger.warn(`dsh-mishu: mail #${account.id} sync failed (${(error as Error).message})`))
       }
+      // What the sync turned up may be urgent.
+      await this.notify()
     })().finally(() => { this.syncing = undefined })
     return this.syncing
   }

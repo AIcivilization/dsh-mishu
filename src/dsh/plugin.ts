@@ -93,12 +93,16 @@ export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(c
     firstSync.unref()
     const syncTimer = setInterval(() => { void runtime.syncAll() }, config.github.intervalMinutes * 60_000)
     syncTimer.unref()
+    // Reminders look at the clock every minute: the brief's time, the end of quiet hours.
+    const notifyTimer = setInterval(() => { void runtime.notify() }, 60_000)
+    notifyTimer.unref()
     const settings = runtime.settings()
     ctx.logger.info(`dsh-mishu: notebook ${paths.db}; language ${runtime.lang()}; github ${settings.githubEnabled ? `every ${config.github.intervalMinutes} min, mark read ${settings.markRead}` : 'off'}; ${runtime.accounts().length} mail account(s); secrets in ${runtime.secrets.kind}`)
     return async () => {
       clearInterval(tickTimer)
       clearTimeout(firstSync)
       clearInterval(syncTimer)
+      clearInterval(notifyTimer)
       await Promise.race([runtime.idle(), new Promise(resolve => setTimeout(resolve, 5000).unref())])
       opened.close()
       runtime.store = undefined

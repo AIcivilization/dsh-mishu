@@ -11,10 +11,10 @@
  */
 
 import {
-  addDays, addSeries, bi, buildAsk, buildBoard, buildDetail, dayOf, deleteGithubToken, deleteMailAccount, describeMailError, MishuError, describeSeries, detectLang, errorText, GitHubClient,
+  addDays, addSeries, bi, deleteFeishu, deliver, FEISHU_WEBHOOK, notifySettings, NOTIFY_REPORT_KEY, saveFeishu, saveNotifySettings, testMessage, buildAsk, buildBoard, buildDetail, dayOf, deleteGithubToken, deleteMailAccount, describeMailError, MishuError, describeSeries, detectLang, errorText, GitHubClient,
   MAIL_PRESETS, mailReportKey, NEW_TOKEN_URL, normalizePassword, providerMismatch, resolveSeries, saveGithubToken, saveMailAccount, saveSettings, secretAccount, secretEnvName,
   setStatusByUser, snoozeByUser, stopSeries, tickManual,
-  type AskRequest, type BoardData, type DeviceState, type Category, type Lang, type MailAccount, type MailSyncReport, type MishuStore, type SeriesInput, type UserSettings,
+  type AskRequest, type BoardData, type ChannelId, type DeviceState, type NotifySettings, type Category, type Lang, type MailAccount, type MailSyncReport, type MishuStore, type SeriesInput, type UserSettings,
 } from '../core/index.ts'
 import { resolveAccount } from '../core/mail/account.ts'
 import type { Runtime } from './runtime.ts'
@@ -114,6 +114,15 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
         ...secrets.available && secrets.file !== undefined ? { file: { path: secrets.file.path, why: secrets.file.why[lang] } } : {},
       },
       accounts,
+      notify: {
+        settings: notifySettings(store),
+        channels: await Promise.all((['desktop', 'feishu'] as ChannelId[]).map(async (id) => {
+          const status = await runtime.channels[id].status()
+          return { id, enabled: notifySettings(store).channels[id], available: status.available, ...status.available ? {} : { why: status.why[lang] } }
+        })),
+        feishu: { configured: (await runtime.secrets.get(FEISHU_WEBHOOK).catch(() => undefined)) !== undefined },
+        last: store.get(NOTIFY_REPORT_KEY) ?? null,
+      },
       presets: MAIL_PRESETS.map(p => ({
         id: p.id, label: p.label[lang], host: p.host, port: p.port, secure: p.secure, supported: p.supported, howTo: p.howTo[lang],
         domains: p.domains, passwordLength: p.passwordLength ?? null,
@@ -247,6 +256,45 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
     '/github/token/delete': async (body) => {
       await deleteGithubToken(runtime.secrets)
       return { view: await settingsView(langOf(body)) }
+    },
+
+    // ── reminders ─────────────────────────────────────────
+
+    '/notify/save': async (body) => {
+      const lang = langOf(body)
+      saveNotifySettings(need(lang), (body.notify ?? {}) as Partial<NotifySettings>, clock())
+      return { view: await settingsView(lang) }
+    },
+
+    /** One test message through one channel, turned on or not. */
+    '/notify/test': async (body) => {
+      const lang = langOf(body)
+      const id = String(body.channel) as ChannelId
+      const channel = runtime.channels[id]
+      if (channel === undefined) throw new ApiError(lang === 'zh' ? '没有这个渠道' : 'No such channel')
+      const status = await channel.status()
+      if (!status.available) throw new ApiError(status.why[lang])
+      const report = await deliver(need(lang), [channel], testMessage(lang), 0, clock())
+      const failed = report.results.find(r => !r.ok)
+      if (failed !== undefined) throw new ApiError(failed.error ?? '')
+      return { sent: true }
+    },
+
+    /** A Feishu bot: tried with a first message, then kept as a secret; reminders go there from now on. */
+    '/feishu/save': async (body) => {
+      const lang = langOf(body)
+      const store = need(lang)
+      await saveFeishu(runtime.secrets, { webhook: String(body.webhook ?? ''), ...typeof body.secret === 'string' ? { secret: body.secret } : {} }, lang)
+      saveNotifySettings(store, { channels: { ...notifySettings(store).channels, feishu: true } }, clock())
+      return { view: await settingsView(lang) }
+    },
+
+    '/feishu/delete': async (body) => {
+      const lang = langOf(body)
+      const store = need(lang)
+      await deleteFeishu(runtime.secrets)
+      saveNotifySettings(store, { channels: { ...notifySettings(store).channels, feishu: false } }, clock())
+      return { view: await settingsView(lang) }
     },
 
     '/mail/save': async (body) => {

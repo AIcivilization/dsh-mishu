@@ -30,6 +30,11 @@ export { ImapFetcher } from './mail/imap.ts'
 export { judgeMail } from './mail/rules.ts'
 export { describeMailError, MAIL_SOURCE, mailReportKey, syncMail, type MailSyncReport } from './mail/sync.ts'
 export { findProgram } from './exec.ts'
+export { deleteFeishu, DesktopChannel, FeishuChannel, saveFeishu, FEISHU_WEBHOOK } from './channels.ts'
+export {
+  DEFAULT_NOTIFY, deliver, inQuiet, localClock, notifySettings, notifyTick, NOTIFY_REPORT_KEY, saveNotifySettings, testMessage, URGENT_REASONS,
+  type Channel, type ChannelId, type Message, type NotifyReport, type NotifySettings,
+} from './notify.ts'
 export { restartPlan, scheduleRestart, type RestartPlan, type RestartStarted } from './restart.ts'
 export { FileSecrets, KeychainOrFile, MemorySecrets, secretEnvName, secretFromEnv, systemSecrets, type SecretStatus, type SecretStore } from './secrets.ts'
 export { deleteMailAccount, effectiveSettings, mailAccounts, saveMailAccount, saveSettings, type Defaults, type UserSettings } from './settings.ts'
