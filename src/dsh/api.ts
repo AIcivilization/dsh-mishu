@@ -289,8 +289,7 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
     '/restart': async (body) => {
       const plan = runtime.restarter.plan()
       if (plan.kind === 'none') throw new ApiError(plan.why[langOf(body)])
-      const { log } = runtime.restarter.schedule(plan)
-      return { restarting: true, log }
+      return { restarting: true, ...runtime.restarter.schedule(plan) }
     },
 
     '/mail/sync': async (body) => {

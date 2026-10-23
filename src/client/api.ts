@@ -105,7 +105,7 @@ export type AccountDraft = Partial<Omit<AccountView, 'hasPassword' | 'envName' |
 
 export const restartApi = {
   info: (lang: string) => post<{ supported: true } | { supported: false; why: string }>('/restart/info', { lang }),
-  restart: (lang: string) => post<{ restarting: true }>('/restart', { lang }),
+  restart: (lang: string) => post<{ restarting: true; reconnect?: boolean }>('/restart', { lang }),
 }
 
 export type DeviceView =

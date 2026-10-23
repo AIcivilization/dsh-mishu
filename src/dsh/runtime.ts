@@ -9,7 +9,7 @@ import {
   dayOf, detectLang, effectiveSettings, GitHubClient, ImapFetcher, mailAccounts, mailReportKey, renderBrief,
   FileSecrets, GithubDeviceLogin, KeychainOrFile, mishuPaths, resolveGithubToken, secretAccount, secretFromEnv, syncGithub, syncMail, systemSecrets, tickManual, bi,
   type Defaults, type GithubSyncReport, type Lang, type MailAccount, type MailFetcher, type MailSyncReport, type MishuStore,
-  restartPlan, scheduleRestart, type RestartPlan, type SecretStore, type TokenResult,
+  restartPlan, scheduleRestart, type RestartPlan, type RestartStarted, type SecretStore, type TokenResult,
 } from '../core/index.ts'
 import type { MishuConfig } from './config.ts'
 
@@ -25,7 +25,7 @@ export class Runtime {
   /** "Sign in with GitHub" in progress, if any; tests swap it to replay GitHub. */
   githubLogin: GithubDeviceLogin
   /** How DSH restarts; tests swap it so they never restart anything. */
-  restarter: { plan(): RestartPlan; schedule(plan: Exclude<RestartPlan, { kind: 'none' }>): { log: string } } = { plan: () => restartPlan(), schedule: scheduleRestart }
+  restarter: { plan(): RestartPlan; schedule(plan: Exclude<RestartPlan, { kind: 'none' }>): RestartStarted } = { plan: () => restartPlan(), schedule: plan => scheduleRestart(plan) }
 
   constructor(
     config: MishuConfig,

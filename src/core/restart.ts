@@ -15,22 +15,31 @@
  *   Windows  `taskkill /PID` without /F (a close request), then the app again
  *   Linux    SIGTERM to the app, then the app again
  *
+ * On a server set up with dsh-vps, DSH is a child of the dsh-gate login
+ * gateway (`$GATE_HOME/gate/server.js`, run by systemd), which starts DSH
+ * again whenever it exits and picks up the new sign-in token itself. There
+ * a restart is simply DSH exiting cleanly; the page reconnects.
+ *
  * DSH started with the `dsh` command is not restarted from here: its web
  * address (with a new sign-in token) is printed in that terminal, which a
  * detached replacement could not reach. The page says what to do instead.
  */
 
 import { execFileSync, spawn } from 'node:child_process'
-import { readlinkSync } from 'node:fs'
+import { readFileSync, readlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, posix } from 'node:path'
 import { findProgram } from './exec.ts'
 import { bi, type Bi } from './i18n.ts'
 
 export type RestartPlan =
   | { kind: 'macos-app'; bundleId: string; appPid: number }
   | { kind: 'desktop-app'; platform: 'win32' | 'linux'; exe: string; appPid: number }
+  | { kind: 'gate'; gate: string }
   | { kind: 'none'; why: Bi }
+
+/** Plans carried out by the detached helper (the desktop app quits and reopens). */
+export type AppRestartPlan = Extract<RestartPlan, { kind: 'macos-app' | 'desktop-app' }>
 
 export interface ProcessFacts {
   env: NodeJS.ProcessEnv
@@ -42,6 +51,8 @@ export interface ProcessFacts {
   parentExe: string | undefined
   /** macOS: CFBundleIdentifier from the Info.plist of the .app holding `execPath`. */
   bundleId: string | undefined
+  /** Linux: the parent's command line, to recognise the dsh-gate supervisor. */
+  parentArgs: string[] | undefined
 }
 
 /** `<x>.app` holding a macOS executable, if any. */
@@ -71,8 +82,20 @@ function bundleIdOf(app: string): string | undefined {
   }
 }
 
+function parentArguments(ppid: number): string[] | undefined {
+  try {
+    return readFileSync(`/proc/${ppid}/cmdline`, 'utf8').split('\0').filter(Boolean)
+  } catch {
+    return undefined
+  }
+}
+
 function here(): ProcessFacts {
-  const facts: ProcessFacts = { env: process.env, platform: process.platform, execPath: process.execPath, ppid: process.ppid, electron: process.versions.electron, parentExe: undefined, bundleId: undefined }
+  const facts: ProcessFacts = {
+    env: process.env, platform: process.platform, execPath: process.execPath, ppid: process.ppid, electron: process.versions.electron,
+    parentExe: undefined, bundleId: undefined, parentArgs: undefined,
+  }
+  if (facts.platform === 'linux' && facts.env.GATE_HOME !== undefined) facts.parentArgs = parentArguments(facts.ppid)
   if (facts.electron === undefined || facts.env.ELECTRON_RUN_AS_NODE !== '1' || facts.ppid <= 1) return facts
   facts.parentExe = parentExecutable(facts.ppid, facts.platform)
   const app = facts.platform === 'darwin' ? appBundle(facts.execPath) : undefined
@@ -91,6 +114,12 @@ const FROM_TERMINAL = bi(
 
 /** How DSH can be restarted from here, or why it cannot. */
 export function restartPlan(facts: ProcessFacts = here()): RestartPlan {
+  // dsh-vps: the parent must be that very gateway, not just a shell that has GATE_HOME set.
+  const gateHome = facts.env.GATE_HOME
+  if (gateHome !== undefined && gateHome !== '') {
+    const gate = posix.join(gateHome, 'gate', 'server.js')
+    if (facts.parentArgs?.includes(gate) === true) return { kind: 'gate', gate }
+  }
   const desktop = facts.electron !== undefined && facts.env.ELECTRON_RUN_AS_NODE === '1' && facts.ppid > 1 && samePath(facts.parentExe, facts.execPath, facts.platform)
   if (!desktop) return { kind: 'none', why: FROM_TERMINAL }
   if (facts.platform === 'darwin') {
@@ -117,7 +146,7 @@ const MAC_TOOLS: MacTools = { osascript: '/usr/bin/osascript', open: '/usr/bin/o
  * inherit environment variables", open(1)). So the app is always started
  * without that variable; with it, the app starts as bare Node and exits.
  */
-export function restartHelperSource(plan: Exclude<RestartPlan, { kind: 'none' }>, log: string, tools: MacTools = MAC_TOOLS): string {
+export function restartHelperSource(plan: AppRestartPlan, log: string, tools: MacTools = MAC_TOOLS): string {
   const mac = plan.kind === 'macos-app'
   const app = mac ? `application id ${JSON.stringify(plan.bundleId)}` : ''
   const quit = mac
@@ -165,8 +194,16 @@ export function restartHelperSource(plan: Exclude<RestartPlan, { kind: 'none' }>
   ].join('\n')
 }
 
-/** Start the helper and return where it logs. Runs with this process's Node (Electron as Node in the app). */
-export function scheduleRestart(plan: Exclude<RestartPlan, { kind: 'none' }>): { log: string } {
+/** What the page is told: where the helper logs, or that it should wait and reconnect. */
+export interface RestartStarted { log?: string; reconnect?: boolean }
+
+/** Start the restart: under dsh-gate, exit; in the desktop app, start the helper and say where it logs. Runs with this process's Node (Electron as Node in the app). */
+export function scheduleRestart(plan: Exclude<RestartPlan, { kind: 'none' }>, exit: () => void = () => process.kill(process.pid, 'SIGTERM')): RestartStarted {
+  if (plan.kind === 'gate') {
+    // Let the page receive its answer, then leave the normal way; the gateway starts DSH again.
+    setTimeout(exit, 400)
+    return { reconnect: true }
+  }
   const log = join(tmpdir(), `dsh-mishu-restart-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.log`)
   const helper = spawn(process.execPath, ['-e', restartHelperSource(plan, log)], { detached: true, stdio: 'ignore', env: process.env, windowsHide: true })
   helper.unref()

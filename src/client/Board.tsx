@@ -502,7 +502,13 @@ function RestartButton({ lang, locale }: { lang: UiLang; locale: () => string })
     if (!window.confirm(t.restartConfirm)) return
     setStatus({ ok: true, text: t.restarting })
     const r = await restartApi.restart(locale())
-    if (!r.ok) setStatus({ ok: false, text: r.message })
+    if (!r.ok) {
+      setStatus({ ok: false, text: r.message })
+    } else if (r.reconnect === true) {
+      // On a server the page stays: wait for DSH to go away and come back, then reload.
+      setStatus({ ok: true, text: t.restartingWeb })
+      setStatus({ ok: true, text: await reconnect(locale) ? t.restartReloading : t.restartSlow })
+    }
   }
   return (
     <>
@@ -510,4 +516,20 @@ function RestartButton({ lang, locale }: { lang: UiLang; locale: () => string })
       {status === undefined ? null : <span className={status.ok ? 'mishu-hint' : 'mishu-hint mishu-warn'}>{status.text}</span>}
     </>
   )
+}
+
+/** Wait for the server to go down and answer again (up to two minutes), then reload the page. */
+async function reconnect(locale: () => string): Promise<boolean> {
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+  let wentDown = false
+  for (const until = Date.now() + 120_000; Date.now() < until;) {
+    await sleep(1500)
+    const r = await restartApi.info(locale())
+    if (!r.ok) wentDown = true
+    else if (wentDown) {
+      window.location.reload()
+      return true
+    }
+  }
+  return false
 }

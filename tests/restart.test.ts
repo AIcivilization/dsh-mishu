@@ -5,14 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { Script } from 'node:vm'
-import { restartHelperSource, restartPlan, type ProcessFacts, type RestartPlan } from '../src/core/restart.ts'
+import { restartHelperSource, restartPlan, scheduleRestart, type ProcessFacts, type RestartPlan } from '../src/core/restart.ts'
 import { MemorySecrets } from '../src/core/secrets.ts'
 import { apiHandlers } from '../src/dsh/api.ts'
 import { Config } from '../src/dsh/config.ts'
 import { Runtime } from '../src/dsh/runtime.ts'
 
 const APP = '/Applications/Harness.app/Contents/MacOS/Harness'
-const facts = (patch: Partial<ProcessFacts>): ProcessFacts => ({ env: {}, platform: 'darwin', execPath: APP, ppid: 4242, electron: undefined, parentExe: undefined, bundleId: undefined, ...patch })
+const facts = (patch: Partial<ProcessFacts>): ProcessFacts => ({ env: {}, platform: 'darwin', execPath: APP, ppid: 4242, electron: undefined, parentExe: undefined, bundleId: undefined, parentArgs: undefined, ...patch })
 const inApp = { electron: '37.0.0', env: { ELECTRON_RUN_AS_NODE: '1' }, parentExe: APP, bundleId: 'com.example.harness' }
 
 test('the desktop app restarts by quitting and reopening; DSH from a terminal says what to do instead', () => {
@@ -94,4 +94,21 @@ test('the API restarts only where it can, and says why elsewhere', async () => {
   assert.deepEqual(await api['/restart/info']!({ lang: 'zh' }), { supported: true })
   assert.deepEqual(await api['/restart']!({ lang: 'zh' }), { restarting: true, log: '/tmp/x.log' })
   assert.deepEqual(scheduled, [plan])
+})
+
+test('on a dsh-vps server the gateway restarts DSH: DSH just exits, and the page reconnects', async () => {
+  const gated = facts({ platform: 'linux', execPath: '/usr/bin/node', ppid: 812, env: { GATE_HOME: '/opt/dsh-vps' }, parentArgs: ['/usr/bin/node', '/opt/dsh-vps/gate/server.js'] })
+  assert.deepEqual(restartPlan(gated), { kind: 'gate', gate: '/opt/dsh-vps/gate/server.js' })
+  assert.equal(restartPlan({ ...gated, parentArgs: ['-bash'] }).kind, 'none', 'GATE_HOME in a shell is not the gateway')
+  assert.equal(restartPlan({ ...gated, parentArgs: undefined }).kind, 'none', 'an unreadable parent is not guessed')
+
+  let exited = 0
+  assert.deepEqual(scheduleRestart({ kind: 'gate', gate: '/opt/dsh-vps/gate/server.js' }, () => { exited++ }), { reconnect: true })
+  assert.equal(exited, 0, 'the page gets its answer first')
+  await new Promise(resolve => setTimeout(resolve, 500))
+  assert.equal(exited, 1)
+
+  const runtime = new Runtime(Config({ github: { enabled: false } }), { info() {}, warn() {} }, new MemorySecrets(), { unread: async () => [] })
+  runtime.restarter = { plan: () => ({ kind: 'gate', gate: '/opt/dsh-vps/gate/server.js' }), schedule: () => ({ reconnect: true }) }
+  assert.deepEqual(await apiHandlers(runtime, () => 0)['/restart']!({ lang: 'zh' }), { restarting: true, reconnect: true })
 })
