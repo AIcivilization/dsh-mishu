@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AskAI, type OpenChat } from './AskAI.tsx'
 import { settingsApi, type AccountDraft, type AccountView, type DeviceView, type SettingsView } from './api.ts'
+import { Fold, FoldGroup } from './Fold.tsx'
 import { Modal } from './Modal.tsx'
 import { NotifySection } from './Notify.tsx'
 import { TEXT, type UiLang } from './text.ts'
@@ -75,12 +76,12 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
   )
 
   return (
+    <FoldGroup>
     <div className="mishu-settings">
       {error === undefined ? null : <div className="mishu-error">{t.failed}{error}</div>}
       {note === undefined ? null : <div className="mishu-ok">{note}</div>}
 
-      <section className="mishu-panel">
-        <h2>{t.bSources}</h2>
+      <Fold id="sources" className="mishu-panel" title={t.bSources}>
         <p className="mishu-hint">{t.bSourcesHint}</p>
 
         <h3>{t.sGithub}</h3>
@@ -122,10 +123,9 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
           <MailDialog draft={editing} view={view} lang={lang} locale={locale} openChat={openChat}
             onDone={(next, note) => { setEditing(undefined); if (next !== undefined) take({ ok: true, view: next }, note ?? t.sSaved) }} />
         )}
-      </section>
+      </Fold>
 
-      <section className="mishu-panel">
-        <h2>{t.bWhat}</h2>
+      <Fold id="what" className="mishu-panel" title={t.bWhat}>
         <p className="mishu-hint">{t.bUrgentRule}</p>
         <div className="mishu-field">{t.sLead}</div>
         <div className="mishu-grid5">
@@ -136,21 +136,18 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
           ))}
         </div>
         <button type="button" className="mishu-btn primary" onClick={() => { void save({ leadDays: lead }) }}>{t.sSave}</button>
-      </section>
+      </Fold>
 
-      <section className="mishu-panel">
-        <h2>{t.bWhen}</h2>
+      <Fold id="when" className="mishu-panel" title={t.bWhen}>
         <NotifySection view={view} lang={lang} locale={locale} take={take} />
-      </section>
+      </Fold>
 
-      <section className="mishu-panel">
-        <h2>{t.bDo}</h2>
+      <Fold id="do" className="mishu-panel" title={t.bDo}>
         {markRead}
         <p className="mishu-hint">{t.bMailReadOnly}</p>
-      </section>
+      </Fold>
 
-      <section className="mishu-panel">
-        <h2>{t.sGeneral}</h2>
+      <Fold id="general" className="mishu-panel" title={t.sGeneral}>
         <label className="mishu-field">{t.sLanguage}
           <select value={view.settings.language} onChange={e => { void save({ language: e.target.value as SettingsView['settings']['language'] }) }}>
             <option value="auto">{t.sLanguageAuto}</option>
@@ -163,8 +160,9 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
             : view.secrets.file !== undefined ? t.sSecretsFile(view.secrets.file.path, view.secrets.file.why)
               : t.sSecretsAt(secretKind)}
         </p>
-      </section>
+      </Fold>
     </div>
+    </FoldGroup>
   )
 }
 
@@ -331,8 +329,7 @@ function AccountRow({ account, secretsOk, lang, locale, openChat, onEdit, onView
         : (lang === 'zh' ? `${new Date(report.at).toLocaleString()} 收信，${report.messages} 封未读` : `checked ${new Date(report.at).toLocaleString()}, ${report.messages} unread`)
   const failed = !account.hasPassword || report?.error !== undefined
   return (
-    <div className="mishu-card">
-      <div className="mishu-card-title">{account.label}{account.enabled ? '' : ` (${lang === 'zh' ? '已停用' : 'disabled'})`}</div>
+    <Fold id={`account-${account.id}`} title={`${account.label}${account.enabled ? '' : ` (${lang === 'zh' ? '已停用' : 'disabled'})`}`}>
       <div className="mishu-card-meta">{account.address} · {account.host}:{account.port}</div>
       {account.mismatch === null ? null : <div className="mishu-card-note mishu-warn">{account.mismatch}</div>}
       <div className={`mishu-card-note ${failed ? 'mishu-danger' : ''}`}>
@@ -346,7 +343,7 @@ function AccountRow({ account, secretsOk, lang, locale, openChat, onEdit, onView
           if (window.confirm(t.sDeleteConfirm)) void settingsApi.deleteMail(locale(), account.id).then(onView)
         }}>{t.sDelete}</button>
       </div>
-    </div>
+    </Fold>
   )
 }
 

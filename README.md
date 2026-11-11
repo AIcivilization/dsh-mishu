@@ -73,7 +73,7 @@
 
 卡片可以拖动：拖到"替你办了"就是办完，拖到"我记着"就是明天再提醒，从"我记着"拖回"要你处理"就是现在处理。三栏之间的分隔条也能拖动调宽度，双击恢复等宽。
 
-**设置**：点页面顶部的"设置"，按秘书的活分成四块：① 它看哪里（GitHub、邮箱）；② 什么事要告诉你（哪些算急事、各类别提前几天）；③ 什么时候、怎么告诉你（主动提醒，见下）；④ 能替你办什么（在 GitHub 上标已读的方式；邮件一律只读）。最后是语言和密码存在哪。
+**设置**：点页面顶部的"设置"，按秘书的活分成四块：① 它看哪里（GitHub、邮箱）；② 什么事要告诉你（哪些算急事、各类别提前几天）；③ 什么时候、怎么告诉你（主动提醒，见下）；④ 能替你办什么（在 GitHub 上标已读的方式；邮件一律只读）。最后是语言和密码存在哪。每块都是折叠的卡片，平时只显示标题，点开才展开，一次只开一张；里面的邮箱账户、通知渠道也是同样可折叠的卡片，开关就在标题右边，不展开也能点。
 
 **主动提醒**：不用打开看板也能知道。
 - 每日简报：每天到点（默认 09:00）发一份"要你处理"和"快到期"的清单；没事就不发。
@@ -215,7 +215,7 @@ Filter the board by source: All, GitHub, Mail, Noted.
 
 Cards can be dragged: onto "Done for you" to mark done, onto "Keeping for you" to snooze until tomorrow, from "Keeping for you" back to "To handle" to handle it now. The dividers between the columns can be dragged too; double-click one to make the columns equal.
 
-**Settings**: the "Settings" tab at the top of the page: language, warning days per category, GitHub (on/off, where the token comes from, connection test, how to mark read), mail accounts (add, test, check now, edit, delete).
+**Settings**: the "Settings" tab at the top of the page: language, warning days per category, GitHub (on/off, where the token comes from, connection test, how to mark read), mail accounts (add, test, check now, edit, delete). Every block is a folded card that shows only its title until you click it, and only one is open at a time; mail accounts and notification channels fold the same way, with their switch on the title row so you can flip it without opening the card.
 
 The settings follow the secretary's job in four parts: 1. where it looks (GitHub, mail); 2. what to tell you about (what counts as urgent, warning days per category); 3. when and how to tell you (reminders, below); 4. what it may do for you (marking read on GitHub; mail is always read-only). Then language and where secrets are kept.
 

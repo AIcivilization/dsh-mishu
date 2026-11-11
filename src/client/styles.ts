@@ -110,10 +110,17 @@ export const STYLES = `
 .mishu-chip span{color:${FAINT}}
 .mishu-chip.active{border-color:${ACCENT};color:${ACCENT}}
 .mishu-chip.active span{color:${ACCENT}}
-.mishu-settings{display:flex;flex-direction:column;gap:12px;max-width:760px}
-.mishu-panel{background:${LAYER1};border-radius:12px;padding:12px 14px}
-.mishu-panel h2{font-size:14px;font-weight:600;margin:0 0 8px}
+.mishu-settings{display:flex;flex-direction:column;gap:8px;max-width:760px}
+.mishu-panel{background:${LAYER1};border:1px solid transparent;border-radius:12px;padding:6px 10px}
+.mishu-panel.open{border-color:${LINE}}
+.mishu-panel .mishu-card-head{font-size:14px;padding:6px 4px}
+.mishu-panel .mishu-card-body{padding:2px 6px 8px}
 .mishu-panel h3{font-size:13px;font-weight:600;margin:14px 0 6px}
+.mishu-fold+.mishu-fold{margin-top:6px}
+.mishu-fold .mishu-fold{background:${LAYER2}}
+.mishu-card-aside{flex:0 0 auto;display:inline-flex;align-items:center;margin-left:auto}
+.mishu-check-inline{margin:0}
+.mishu-check-inline input{cursor:pointer}
 .mishu-notify-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .mishu-notify-row input[type=time]{font:inherit;font-size:13px;color:${TEXT};background:${LAYER2};border:1px solid ${LINE_STRONG};border-radius:6px;padding:2px 6px}
 .mishu-grid5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:8px}

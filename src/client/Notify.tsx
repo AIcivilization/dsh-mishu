@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import { settingsApi, type NotifySettingsView, type SettingsView } from './api.ts'
+import { Fold } from './Fold.tsx'
 import { Modal } from './Modal.tsx'
 import { TEXT, type UiLang } from './text.ts'
 
@@ -65,14 +66,17 @@ export function NotifySection({ view, lang, locale, take }: { view: SettingsView
         const result = tested[channel.id]
         const feishu = channel.id === 'feishu'
         return (
-          <div key={channel.id} className="mishu-card">
-            <div className="mishu-notify-row">
-              <label className="mishu-check">
+          <Fold
+            key={channel.id}
+            id={`channel-${channel.id}`}
+            title={feishu ? t.nFeishu : t.nDesktop}
+            aside={(
+              <label className="mishu-check mishu-check-inline" title={channel.available ? undefined : channel.why}>
                 <input type="checkbox" checked={channel.enabled} disabled={!channel.available}
                   onChange={e => { void save({ channels: { ...notify.channels, [channel.id]: e.target.checked } }) }} />
-                {feishu ? t.nFeishu : t.nDesktop}
               </label>
-            </div>
+            )}
+          >
             <div className={`mishu-card-note ${channel.available ? '' : 'mishu-warn'}`}>
               {channel.available ? (feishu ? t.nFeishuOn : t.nDesktopOn) : channel.why}
             </div>
@@ -86,7 +90,7 @@ export function NotifySection({ view, lang, locale, take }: { view: SettingsView
               ) : null}
               {result === undefined ? null : <span className={result.ok ? 'mishu-hint' : 'mishu-hint mishu-danger'}>{result.text}</span>}
             </div>
-          </div>
+          </Fold>
         )
       })}
       {last === null ? null : <p className="mishu-hint">{t.nLast(new Date(last.at).toLocaleString(), last.kind, last.results)}</p>}
