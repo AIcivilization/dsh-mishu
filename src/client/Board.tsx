@@ -70,6 +70,7 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
   const [dropOn, setDropOn] = useState<Column | undefined>()
   const [widths, setWidths] = useState<[number, number, number]>(loadWidths)
   const [tab, setTab] = useState<'board' | 'settings'>('board')
+  const [openCard, setOpenCard] = useState<string | undefined>()
   const [source, setSourceState] = useState<Source>(loadSource)
   const setSource = (next: Source) => {
     setSourceState(next)
@@ -179,9 +180,19 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
     open: t.open, done: t.markDone, snooze: t.snooze, dismiss: t.dismiss, unsnooze: t.unsnooze, reopen: t.reopen, stop: t.stop,
   }
 
+  /**
+   * One card open at a time: opening a card folds the one that was open.
+   * Nothing is open to begin with, so the board starts as a list of titles.
+   */
+  const cardKey = (item: BoardCard) => `${item.target}-${item.id}`
+  const toggleCard = (item: BoardCard) => {
+    const key = cardKey(item)
+    setOpenCard(current => (current === key ? undefined : key))
+  }
+
   const card = (item: BoardCard, column: Column) => (
     <Card
-      key={`${item.target}-${item.id}`}
+      key={cardKey(item)}
       item={item}
       column={column}
       lang={lang}
@@ -189,6 +200,8 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
       busy={busy}
       label={label}
       openChat={openChat}
+      open={openCard === cardKey(item)}
+      onToggle={() => toggleCard(item)}
       onAct={(action) => { void act(item, action) }}
       onDragStart={() => { dragged.current = { card: item, from: column } }}
       onDragEnd={() => { dragged.current = undefined; setDropOn(undefined) }}
@@ -321,30 +334,37 @@ interface CardProps {
   busy: boolean
   label: Record<CardAction, string>
   openChat: OpenChat
+  /** Which card is unfolded is the board's business: one at a time, all folded to begin with. */
+  open: boolean
+  onToggle: () => void
   onAct: (action: CardAction) => void
   onDragStart: () => void
   onDragEnd: () => void
 }
 
 /**
- * One card. On "to handle" and "keeping" it says what this is, where the
- * problem is and what to do. On "done for you" it stays short, with a
- * "What happened" button that opens the full story.
+ * One card, folded by default: the row shows the title and a caret, nothing
+ * else. Clicking the row unfolds it — the board folds whichever card was open
+ * before, so only one card is ever unfolded. Unfolded, "to handle" and
+ * "keeping" say what this is, where the problem is and what to do; "done for
+ * you" stays short and tells the full story underneath.
  */
-function Card({ item, column, lang, locale, busy, label, openChat, onAct, onDragStart, onDragEnd }: CardProps) {
+function Card({ item, column, lang, locale, busy, label, openChat, open, onToggle, onAct, onDragStart, onDragEnd }: CardProps) {
   const t = TEXT[lang]
-  const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState<MatterDetail | { error: string } | undefined>()
   const explain = item.explain
   const compact = column === 'done'
 
-  const toggle = () => {
-    const next = !open
-    setOpen(next)
-    if (next && item.target === 'matter') {
-      void mishuApi.detail(locale(), item.id).then(r => setDetail(r.ok ? r.detail : { error: r.message }))
-    }
-  }
+  // The story behind a card is fetched when it is first unfolded, and kept for
+  // the rest of the visit so folding and unfolding does not fetch it again.
+  useEffect(() => {
+    if (!open || item.target !== 'matter' || detail !== undefined) return
+    let alive = true
+    void mishuApi.detail(locale(), item.id).then(r => {
+      if (alive) setDetail(r.ok ? r.detail : { error: r.message })
+    })
+    return () => { alive = false }
+  }, [open, item.target, item.id, detail, locale])
 
   const row = (name: string, text: string | null | undefined, className = '') =>
     text === null || text === undefined || text === '' ? null : (
@@ -353,67 +373,81 @@ function Card({ item, column, lang, locale, busy, label, openChat, onAct, onDrag
 
   return (
     <div
-      className={`mishu-card ${item.tone === 'normal' ? '' : item.tone}`}
+      className={`mishu-card ${open ? 'open' : ''} ${item.tone === 'normal' ? '' : item.tone}`}
       draggable={item.target === 'matter' && column !== 'done'}
       onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; onDragStart() }}
       onDragEnd={onDragEnd}
     >
-      <div className="mishu-card-title">{item.title}</div>
-      <div className="mishu-card-meta">{item.meta}</div>
-      {!compact && explain !== null ? (
-        <div className="mishu-explain">
-          {row(t.what, explain.what)}
-          {row(column === 'remember' ? t.whyKeep : t.why, explain.why)}
-          {row(t.fix, explain.fix, 'mishu-fix')}
-        </div>
-      ) : null}
-      {!compact && explain === null && item.note !== null ? <div className="mishu-card-note">{item.note}</div> : null}
-      {open ? (
-        <div className="mishu-detail">
-          {detail === undefined ? <div className="mishu-empty">{t.loading}</div> : 'error' in detail ? <div className="mishu-danger">{detail.error}</div> : (
-            <>
-              {compact && detail.explain !== null ? (
-                <>
-                  {row(t.what, detail.explain.what)}
-                  {row(t.whyDone, detail.explain.why)}
-                </>
-              ) : null}
-              {detail.did.length > 0 ? (
-                <div className="mishu-row-explain">
-                  <span className="mishu-row-label">{t.did}</span>
-                  <span>{detail.did.map((line, i) => <div key={i}>{line}</div>)}</span>
-                </div>
-              ) : null}
-              {detail.messages.length > 0 ? (
-                <div className="mishu-messages">
-                  <div className="mishu-row-label">{t.messages(detail.messages.length)}</div>
-                  <ul>{detail.messages.map((m, i) => <li key={i}><span>{m.at}</span> {m.title}</li>)}</ul>
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
-      ) : null}
-      <div className="mishu-actions">
-        {column === 'handle' ? <AskAI topic={item.target === 'series' ? { kind: 'series', id: item.id } : { kind: 'matter', id: item.id }} lang={lang} locale={locale} openChat={openChat} /> : null}
-        {item.actions.map((action, index) => (
-          <button
-            key={action}
-            type="button"
-            className={`mishu-btn ${index === 0 ? 'primary' : ''}`}
-            disabled={busy && action !== 'open'}
-            onClick={() => onAct(action)}
-          >
-            {action === 'open' && explain?.link !== undefined ? explain.link.label : label[action]}
-          </button>
-        ))}
-        {item.target === 'matter' ? (
-          <button type="button" className="mishu-btn mishu-btn-quiet" aria-expanded={open} onClick={toggle}>
-            {open ? t.hide : compact ? t.explainDone : t.detail}
-          </button>
-        ) : null}
-        {column === 'handle' ? null : <AskAI topic={item.target === 'series' ? { kind: 'series', id: item.id } : { kind: 'matter', id: item.id }} lang={lang} locale={locale} openChat={openChat} compact />}
+      <div
+        className="mishu-card-head"
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        title={open ? t.hide : compact ? t.explainDone : t.detail}
+        onClick={onToggle}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return
+          event.preventDefault()
+          onToggle()
+        }}
+      >
+        <span className="mishu-caret" aria-hidden="true" />
+        <span className="mishu-card-title">{item.title}</span>
       </div>
+      {open ? (
+        <div className="mishu-card-body">
+          <div className="mishu-card-meta">{item.meta}</div>
+          {!compact && explain !== null ? (
+            <div className="mishu-explain">
+              {row(t.what, explain.what)}
+              {row(column === 'remember' ? t.whyKeep : t.why, explain.why)}
+              {row(t.fix, explain.fix, 'mishu-fix')}
+            </div>
+          ) : null}
+          {!compact && explain === null && item.note !== null ? <div className="mishu-card-note">{item.note}</div> : null}
+          {item.target === 'matter' ? (
+            <div className="mishu-detail">
+              {detail === undefined ? <div className="mishu-empty">{t.loading}</div> : 'error' in detail ? <div className="mishu-danger">{detail.error}</div> : (
+                <>
+                  {compact && detail.explain !== null ? (
+                    <>
+                      {row(t.what, detail.explain.what)}
+                      {row(t.whyDone, detail.explain.why)}
+                    </>
+                  ) : null}
+                  {detail.did.length > 0 ? (
+                    <div className="mishu-row-explain">
+                      <span className="mishu-row-label">{t.did}</span>
+                      <span>{detail.did.map((line, i) => <div key={i}>{line}</div>)}</span>
+                    </div>
+                  ) : null}
+                  {detail.messages.length > 0 ? (
+                    <div className="mishu-messages">
+                      <div className="mishu-row-label">{t.messages(detail.messages.length)}</div>
+                      <ul>{detail.messages.map((m, i) => <li key={i}><span>{m.at}</span> {m.title}</li>)}</ul>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : null}
+          <div className="mishu-actions">
+            {column === 'handle' ? <AskAI topic={item.target === 'series' ? { kind: 'series', id: item.id } : { kind: 'matter', id: item.id }} lang={lang} locale={locale} openChat={openChat} /> : null}
+            {item.actions.map((action, index) => (
+              <button
+                key={action}
+                type="button"
+                className={`mishu-btn ${index === 0 ? 'primary' : ''}`}
+                disabled={busy && action !== 'open'}
+                onClick={() => onAct(action)}
+              >
+                {action === 'open' && explain?.link !== undefined ? explain.link.label : label[action]}
+              </button>
+            ))}
+            {column === 'handle' ? null : <AskAI topic={item.target === 'series' ? { kind: 'series', id: item.id } : { kind: 'matter', id: item.id }} lang={lang} locale={locale} openChat={openChat} compact />}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

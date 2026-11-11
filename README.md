@@ -65,9 +65,9 @@
 
 看板上方可以按来源筛选：全部、GitHub、邮件、交代。
 
-- **要你处理**：现在需要你的事。每张卡片写明**是什么、问题在哪、怎么办**（比如 CI 失败在哪个 job 的哪一步、上次成功是什么时候），主按钮直接打开该看的地方（"看失败日志""去关掉 Actions""去审查"），还有办完了、明天再说、忽略。
+- **要你处理**：现在需要你的事。卡片平时是收起的，只显示标题；点标题展开，一次只展开一张，点另一张时前一张自动收起。展开后写明**是什么、问题在哪、怎么办**（比如 CI 失败在哪个 job 的哪一步、上次成功是什么时候），主按钮直接打开该看的地方（"看失败日志""去关掉 Actions""去审查"），还有办完了、明天再说、忽略。
 - **我记着**：说过"明天再说"的事，以及还没到提醒时间的交代。底部可以直接交代新的事，填写时会实时显示小秘书理解成了什么。
-- **替你办了**：最近 7 天关掉的事，按理由分组。点"怎么回事"能看到它是什么、为什么关掉（附证据链接）、小秘书做了什么、来自哪几条通知。判错了就点"恢复"。
+- **替你办了**：最近 7 天关掉的事，按理由分组。展开一张卡片就能看到它是什么、为什么关掉（附证据链接）、小秘书做了什么、来自哪几条通知。判错了就点"恢复"。
 
 **+AI**：看不明白就点彩色的"+AI"。它会开一个新对话，把这件事的说明、链接和相关通知放进输入框（不会自动发送），你看过、补上自己的问题再按发送。看板上的每张卡片、顶部总结、来源报错、设置页里各邮箱服务商的开通说明都有这个按钮。对话里的 AI 可以用 `mishu_detail` 查一件事的完整记录；要改状态时会先问你。
 
@@ -207,9 +207,9 @@ A thread of replies is one item. Once you read it in your mail client, its item 
 
 Filter the board by source: All, GitHub, Mail, Noted.
 
-- **To handle**: what needs you now. Every card says **what it is, where the problem is and what to do** (for a failing CI: which job and step, when it last passed), and its main button opens the right place ("Open the failing log", "Turn off Actions", "Review it"), next to done, tomorrow and dismiss.
+- **To handle**: what needs you now. Cards stay folded and show only the title; click a title to unfold it — one at a time, so opening another folds the first. Unfolded, a card says **what it is, where the problem is and what to do** (for a failing CI: which job and step, when it last passed), and its main button opens the right place ("Open the failing log", "Turn off Actions", "Review it"), next to done, tomorrow and dismiss.
 - **Keeping for you**: things you put off until tomorrow, and things you told it that are not due for a reminder yet. Add a new one at the bottom, with a live preview of what was understood.
-- **Done for you**: what was closed in the last 7 days, grouped by reason. "What happened" shows what it was, why it was closed (with the evidence link), what the secretary did and which notifications it came from. Reopen any that are wrong.
+- **Done for you**: what was closed in the last 7 days, grouped by reason. Unfold a card to see what it was, why it was closed (with the evidence link), what the secretary did and which notifications it came from. Reopen any that are wrong.
 
 **+AI**: when something is unclear, press the colourful "+AI". It opens a new chat with the item's explanation, link and related notifications in the input box — unsent — so you can read it, add your question and press send. Every card, the summary, source errors and each mail provider's setup note have one. In that chat the AI can use `mishu_detail` to look an item up in full, and asks you before changing anything.
 
