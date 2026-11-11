@@ -13,6 +13,7 @@ import { CATEGORY_LABELS, type Category } from './recur.ts'
 import type { Matter, MishuStore } from './store.ts'
 import type { GithubSyncReport, MarkReadMode } from './github/sync.ts'
 import { dayOf, daysBetween, formatMoment, relativeDay, weekday } from './time.ts'
+import { watchReportKey, type WatchReport } from './watch/source.ts'
 
 export const REASON_LABELS: Record<string, Bi> = {
   merged: bi('已合并', 'merged'),
@@ -47,6 +48,10 @@ export const REASON_LABELS: Record<string, Bi> = {
   'mail-cc': bi('只是抄送', 'Cc only'),
   'read-in-mail': bi('你在邮箱里看过了', 'read in your mail'),
   'account-removed': bi('邮箱账户已移除', 'mail account removed'),
+  'watch-new': bi('有新内容', 'new entries'),
+  'watch-changed': bi('内容有变化', 'changed'),
+  'watch-keyword': bi('提到你关注的字', 'mentioned your words'),
+  'watch-removed': bi('你删掉了这个关注', 'watch removed'),
 }
 
 export function reasonLabel(reason: string | null, lang: Lang): string {
@@ -81,6 +86,7 @@ function sourceTag(m: Matter, lang: Lang): string {
   }
   if (m.source === 'github') return 'GitHub'
   if (m.source === 'mail') return pick(bi('邮件', 'Mail'), lang)
+  if (m.source === 'watch') return pick(bi('关注', 'Watching'), lang)
   return m.source
 }
 
@@ -115,6 +121,8 @@ export interface BriefOptions {
   upcomingDays?: number
   /** Mail accounts, for their status lines. */
   mailAccounts?: Array<{ id: number; label: string }>
+  /** Things you watch yourself, for their status lines. */
+  watches?: Array<{ id: number; label: string }>
 }
 
 function countByReason(matters: Matter[], lang: Lang): string {
@@ -192,6 +200,12 @@ export function renderBrief(store: MishuStore, options: BriefOptions): string {
     if (report === undefined) out.push(zh ? `邮件「${account.label}」：还没收过。` : `Mail "${account.label}": not checked yet.`)
     else if (report.error !== undefined) out.push(zh ? `邮件「${account.label}」：${formatMoment(report.at, now)} 没收成：${report.error.zh}` : `Mail "${account.label}": failed at ${formatMoment(report.at, now)}: ${report.error.en}`)
     else out.push(zh ? `邮件「${account.label}」：${formatMoment(report.at, now)} 收信，${report.messages} 封未读。` : `Mail "${account.label}": checked ${formatMoment(report.at, now)}, ${report.messages} unread.`)
+  }
+  for (const source of options.watches ?? []) {
+    const report = store.get<WatchReport>(watchReportKey(source.id))
+    if (report === undefined) out.push(zh ? `关注「${source.label}」：还没看过。` : `Watching "${source.label}": not checked yet.`)
+    else if (report.error !== undefined) out.push(zh ? `关注「${source.label}」：${formatMoment(report.at, now)} 没读成：${report.error.zh}` : `Watching "${source.label}": failed at ${formatMoment(report.at, now)}: ${report.error.en}`)
+    else out.push(zh ? `关注「${source.label}」：${formatMoment(report.at, now)} 看过，${report.items} 条内容。` : `Watching "${source.label}": checked ${formatMoment(report.at, now)}, ${report.items} entries.`)
   }
   return out.join('\n')
 }

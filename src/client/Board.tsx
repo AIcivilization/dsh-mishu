@@ -233,6 +233,7 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
     { id: 'all', label: t.all },
     { id: 'github', label: t.sourceGithub },
     { id: 'mail', label: t.sourceMail },
+    { id: 'watch', label: t.sourceWatch },
     { id: 'manual', label: t.sourceManual },
   ]
   const template = `minmax(0, ${widths[0]}fr) 10px minmax(0, ${widths[1]}fr) 10px minmax(0, ${widths[2]}fr)`
@@ -266,6 +267,12 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
             <span key={m.id}>
               <i className={`mishu-dot ${m.state}`} />{m.text}
               {m.state === 'error' ? <AskAI topic={{ kind: 'mail-error', accountId: m.id }} lang={lang} locale={locale} openChat={openChat} compact /> : null}
+            </span>
+          ))}
+          {board.sources.watch.map(w => (
+            <span key={`watch-${w.id}`}>
+              <i className={`mishu-dot ${w.state}`} />{w.text}
+              {w.state === 'error' ? <AskAI topic={{ kind: 'watch-error', watchId: w.id }} lang={lang} locale={locale} openChat={openChat} compact /> : null}
             </span>
           ))}
           <button type="button" className="mishu-btn" disabled={syncing} onClick={() => { void sync() }}>{syncing ? t.syncing : t.sync}</button>

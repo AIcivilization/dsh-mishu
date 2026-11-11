@@ -11,10 +11,12 @@
  */
 
 import {
+  describeWatchError,
   addDays, addSeries, bi, deleteFeishu, deliver, FEISHU_WEBHOOK, notifySettings, NOTIFY_REPORT_KEY, saveFeishu, saveNotifySettings, testMessage, buildAsk, buildBoard, buildDetail, dayOf, deleteGithubToken, deleteMailAccount, describeMailError, MishuError, describeSeries, detectLang, errorText, GitHubClient,
   MAIL_PRESETS, mailReportKey, NEW_TOKEN_URL, normalizePassword, providerMismatch, resolveSeries, saveGithubToken, saveMailAccount, saveSettings, secretAccount, secretEnvName,
   setStatusByUser, snoozeByUser, stopSeries, tickManual,
   type AskRequest, type BoardData, type ChannelId, type DeviceState, type NotifySettings, type Category, type Lang, type MailAccount, type MailSyncReport, type MishuStore, type SeriesInput, type UserSettings,
+  deleteWatch, describeKeywords, describeWatch, parseKeywords, readWatchBody, resolveWatch, saveWatch, watchById, watchReportKey, watchSources, type WatchInput, type WatchReport, type WatchSource,
 } from '../core/index.ts'
 import { resolveAccount } from '../core/mail/account.ts'
 import type { Runtime } from './runtime.ts'
@@ -68,6 +70,34 @@ function accountInput(value: unknown): Partial<MailAccount> {
 
 const password = (body: Body) => (typeof body.password === 'string' && body.password !== '' ? body.password : undefined)
 
+function watchInput(value: unknown): WatchInput {
+  const w = (value ?? {}) as Record<string, unknown>
+  const text = (v: unknown) => (typeof v === 'string' ? v : undefined)
+  const out: WatchInput = {}
+  if (Number.isInteger(Number(w.id)) && Number(w.id) > 0) out.id = Number(w.id)
+  if (text(w.label) !== undefined) out.label = text(w.label)!
+  if (text(w.url) !== undefined) out.url = text(w.url)!
+  if (typeof w.keywords === 'string' || Array.isArray(w.keywords)) out.keywords = w.keywords as string | string[]
+  if (typeof w.enabled === 'boolean') out.enabled = w.enabled
+  if (w.intervalMinutes !== undefined && w.intervalMinutes !== null && w.intervalMinutes !== '') out.intervalMinutes = Number(w.intervalMinutes)
+  return out
+}
+
+/** What the settings page shows for one watch. */
+function watchView(store: MishuStore, source: WatchSource, lang: Lang) {
+  return {
+    id: source.id,
+    label: source.label,
+    url: source.url,
+    keywords: source.keywords.join(' '),
+    enabled: source.enabled,
+    intervalMinutes: source.intervalMinutes,
+    status: describeWatch(store, source, lang),
+    summary: describeKeywords(source, lang),
+    report: store.get<WatchReport>(watchReportKey(source.id)) ?? null,
+  }
+}
+
 export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): Record<string, Handler> {
   const langOf = (body: Body): Lang => runtime.fixedLang() ?? detectLang(typeof body.lang === 'string' ? body.lang : undefined)
   const need = (lang: Lang) => {
@@ -82,6 +112,7 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
     return buildBoard(store, {
       now: at, lang, github: { enabled: settings.githubEnabled, markRead: settings.markRead },
       mailAccounts: runtime.accounts(),
+      watches: runtime.watches(),
     })
   }
 
@@ -114,6 +145,7 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
         ...secrets.available && secrets.file !== undefined ? { file: { path: secrets.file.path, why: secrets.file.why[lang] } } : {},
       },
       accounts,
+      watches: watchSources(store).map(source => watchView(store, source, lang)),
       notify: {
         settings: notifySettings(store),
         channels: await Promise.all((['desktop', 'feishu'] as ChannelId[]).map(async (id) => {
@@ -201,13 +233,14 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
     '/ask': async (body) => {
       const lang = langOf(body)
       const ask = (body.ask ?? {}) as Partial<AskRequest> & Record<string, unknown>
-      const kinds = ['matter', 'series', 'summary', 'github-error', 'mail-error', 'mail-setup']
+      const kinds = ['matter', 'series', 'summary', 'github-error', 'mail-error', 'mail-setup', 'watch-error', 'watch-setup']
       if (typeof ask.kind !== 'string' || !kinds.includes(ask.kind)) throw new ApiError(lang === 'zh' ? '不认识要问什么' : 'Unknown question')
       const request = {
         kind: ask.kind,
         ...ask.id === undefined ? {} : { id: Number(ask.id) },
         ...ask.accountId === undefined ? {} : { accountId: Number(ask.accountId) },
         ...ask.preset === undefined ? {} : { preset: String(ask.preset) },
+        ...ask.watchId === undefined ? {} : { watchId: Number(ask.watchId) },
         ...typeof ask.error === 'string' && ask.error !== '' ? { error: ask.error.slice(0, 1000) } : {},
       } as AskRequest
       const prompt = buildAsk(need(lang), request, { now: clock(), lang, markRead: runtime.settings().markRead, accounts: runtime.accounts() })
@@ -326,6 +359,60 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
         throw new ApiError(lang === 'zh' ? `没有 #${body.id} 这个邮箱账户` : `There is no mail account #${body.id}`)
       }
       return { view: await settingsView(lang) }
+    },
+
+    // ── things you watch yourself ─────────────────────────
+
+    '/watch/save': async (body) => {
+      const lang = langOf(body)
+      const source = saveWatch(need(lang), watchInput(body.watch), clock())
+      return { id: source.id, view: await settingsView(lang) }
+    },
+
+    /**
+     * Read it once without saving: how many entries came back, and what the
+     * first one is — enough to tell a feed from a login wall.
+     */
+    '/watch/test': async (body) => {
+      const lang = langOf(body)
+      const input = watchInput(body.watch)
+      const source = resolveWatch(input, input.id ?? 0)
+      let page: { status: number; body: string; contentType: string }
+      try {
+        page = await runtime.watchFetch(source.url)
+      } catch (error) {
+        throw new MishuError(describeWatchError(error, source))
+      }
+      if (page.status >= 400) throw new ApiError(lang === 'zh' ? `这个网址返回 ${page.status}` : `The address answered ${page.status}`)
+      const items = readWatchBody({ body: page.body, contentType: page.contentType, url: source.url, now: clock() })
+      if (items.length === 0) throw new ApiError(lang === 'zh' ? '读到了，但里面没有内容' : 'It loaded, but there was nothing in it')
+      const first = items[0]!
+      const words = parseKeywords(input.keywords)
+      const haystack = `${first.title}\n${first.text}`.toLowerCase()
+      const hit = words.find(word => haystack.includes(word))
+      return {
+        items: items.length,
+        title: first.title.slice(0, 120),
+        excerpt: first.text.slice(0, 200),
+        ...words.length === 0 ? {} : { keywordHit: hit !== undefined, ...hit === undefined ? {} : { keyword: hit } },
+      }
+    },
+
+    '/watch/delete': async (body) => {
+      const lang = langOf(body)
+      if (!deleteWatch(need(lang), Number(body.id), clock())) throw new ApiError(lang === 'zh' ? `没有 #${body.id} 这个关注` : `There is no watch #${body.id}`)
+      return { view: await settingsView(lang) }
+    },
+
+    /** Look at it right now, whatever the interval says. */
+    '/watch/sync': async (body) => {
+      const lang = langOf(body)
+      const store = need(lang)
+      const source = watchById(store, Number(body.id))
+      if (source === undefined) throw new ApiError(lang === 'zh' ? `没有 #${body.id} 这个关注` : `There is no watch #${body.id}`)
+      const report = await runtime.syncWatchSource(source)
+      if (report?.error !== undefined) throw new ApiError(report.error[lang])
+      return { report: report ?? null, board: board(store, lang), view: await settingsView(lang) }
     },
 
     /** Whether the page's "restart DSH" button can work here, and if not, what to do instead. */

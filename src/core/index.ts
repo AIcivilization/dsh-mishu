@@ -38,6 +38,12 @@ export {
 export { restartPlan, scheduleRestart, type RestartPlan, type RestartStarted } from './restart.ts'
 export { FileSecrets, KeychainOrFile, MemorySecrets, secretEnvName, secretFromEnv, systemSecrets, type SecretStatus, type SecretStore } from './secrets.ts'
 export { deleteMailAccount, effectiveSettings, mailAccounts, saveMailAccount, saveSettings, type Defaults, type UserSettings } from './settings.ts'
+export {
+  deleteWatch, dueWatches, entryKey, parseKeywords, resolveWatch, saveWatch, watchById, watchReportKey, watchSources,
+  WATCH_SOURCE, type WatchInput, type WatchReport, type WatchSource,
+} from './watch/source.ts'
+export { describeWatchError, httpFetch, parseFeed, parseJson, parsePage, plainText, readWatchBody, type WatchFetch, type WatchItem } from './watch/fetch.ts'
+export { describeKeywords, describeWatch, diffItems, judgeWatch, syncWatch } from './watch/sync.ts'
 
 export const DEFAULT_HOME = '~/.mishu'
 

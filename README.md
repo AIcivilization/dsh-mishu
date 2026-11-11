@@ -55,7 +55,20 @@
 
 同一封邮件的往来回复算一件事。你在邮件客户端里看过之后，对应的事项会自动关闭。
 
+**自己关注的**：GitHub 和邮箱之外，你也可以在设置页填任意一个网址让小秘书盯着：产品公告页、价格页、招聘页、RSS 订阅、JSON 接口都行。可以填几个"关注哪些字"（比如"上新、补丁、面试"），填了就只在出现这些字时提醒，不填就是有变化就提醒。检查间隔 15 分钟到 24 小时，默认一小时。
+
+| 理由码 | 意思 |
+|---|---|
+| `watch-keyword` | 页面内容提到了你关注的字 |
+| `watch-new` | 订阅源里出现了新的条目 |
+| `watch-changed` | 普通网页的正文变了（比如价格） |
+| `watch-removed` | 你删掉了这个关注，还没处理的事项一并关掉 |
+
+一个关注项算一张卡片，不会因为一天更新十条就刷一屏。刚添加时第一次检查只记下"现在有什么"，不报警；但填了关键词的，第一次命中就告诉你。读不到（断网、404、要登录）会写清原因，卡片不会因此凭空出现。
+
 **密码放在系统钥匙串**：macOS 钥匙串、Windows 凭据管理器、Linux 密钥环（Secret Service）。密码只在设置页输入一次，直接交给钥匙串，不写进任何文件，接口也从不返回它。没有钥匙串的电脑（比如没有桌面的 Linux 服务器），密码和 token 存进记事本目录里的 `secrets.json`：权限 600，只有你的系统账号能读，但没有加密，设置页会写明这一点和原因。
+
+**关注一个网址**：点"+ 关注一个网址"，填网址（和想关注的字），点"先试读一下"当场看读到什么，再"保存并看一次"。
 
 **添加邮箱**：点"+ 添加邮箱"弹出向导。填了地址就自动选好服务商，显示去哪里开 IMAP、拿授权码，带"打开设置页"；授权码位数不对会提醒；"测试并保存"连得上才保存。
 
@@ -63,7 +76,7 @@
 
 **看板**：点 DSH 左侧栏的"小秘书"，打开整页看板。顶部是一句话总结和四个数字（要你处理、7 天内到期、今天替你关掉、待你核对），下面分三栏：
 
-看板上方可以按来源筛选：全部、GitHub、邮件、交代。
+看板上方可以按来源筛选：全部、GitHub、邮件、关注、交代。
 
 - **要你处理**：现在需要你的事。卡片平时是收起的，只显示标题；点标题展开，一次只展开一张，点另一张时前一张自动收起。展开后写明**是什么、问题在哪、怎么办**（比如 CI 失败在哪个 job 的哪一步、上次成功是什么时候），主按钮直接打开该看的地方（"看失败日志""去关掉 Actions""去审查"），还有办完了、明天再说、忽略。
 - **我记着**：说过"明天再说"的事，以及还没到提醒时间的交代。底部可以直接交代新的事，填写时会实时显示小秘书理解成了什么。
@@ -73,7 +86,7 @@
 
 卡片可以拖动：拖到"替你办了"就是办完，拖到"我记着"就是明天再提醒，从"我记着"拖回"要你处理"就是现在处理。三栏之间的分隔条也能拖动调宽度，双击恢复等宽。
 
-**设置**：点页面顶部的"设置"，按秘书的活分成四块：① 它看哪里（GitHub、邮箱）；② 什么事要告诉你（哪些算急事、各类别提前几天）；③ 什么时候、怎么告诉你（主动提醒，见下）；④ 能替你办什么（在 GitHub 上标已读的方式；邮件一律只读）。最后是语言和密码存在哪。每块都是折叠的卡片，平时只显示标题，点开才展开，一次只开一张；里面的邮箱账户、通知渠道也是同样可折叠的卡片，开关就在标题右边，不展开也能点。
+**设置**：点页面顶部的"设置"，按秘书的活分成四块：① 它看哪里（GitHub、邮箱、自己关注的网址）；② 什么事要告诉你（哪些算急事、各类别提前几天）；③ 什么时候、怎么告诉你（主动提醒，见下）；④ 能替你办什么（在 GitHub 上标已读的方式；邮件一律只读）。最后是语言和密码存在哪。每块都是折叠的卡片，平时只显示标题，点开才展开，一次只开一张；里面的邮箱账户、通知渠道也是同样可折叠的卡片，开关就在标题右边，不展开也能点。
 
 **主动提醒**：不用打开看板也能知道。
 - 每日简报：每天到点（默认 09:00）发一份"要你处理"和"快到期"的清单；没事就不发。
@@ -197,7 +210,20 @@ Default warning times: documents 90 days, bills 3, birthdays 7, renewals 7, ever
 
 A thread of replies is one item. Once you read it in your mail client, its item closes by itself.
 
+**Things you watch yourself**: beyond GitHub and mail, you can give the secretary any address on the settings page — a product announcements page, a price, a job posting, an RSS feed, a JSON endpoint. You can list a few words to watch for (say "release, patch, interview"): with words it only tells you when they show up, without words any change is worth a card. The interval runs from 15 minutes to 24 hours, one hour by default.
+
+| Reason | Meaning |
+|---|---|
+| `watch-keyword` | the content mentions a word you watch for |
+| `watch-new` | the feed has entries you have not seen |
+| `watch-changed` | the text of a plain page changed (a price, say) |
+| `watch-removed` | you deleted the watch; anything it left open is closed |
+
+One watch is one card, so a feed that updates ten times a day does not flood the board. The first look only writes down what is there and says nothing — unless you gave it words, in which case a hit is reported at once. A read that fails (offline, 404, behind a login) says why, and never invents a card.
+
 **Passwords live in the system keychain**: the macOS Keychain, Windows Credential Manager or the Linux keyring (Secret Service). You type a password once on the settings page; it goes straight to the keychain, is never written to a file and is never returned by any endpoint. On a computer without one (a Linux server with no desktop, say), passwords and tokens go to `secrets.json` in the notebook directory: mode 600, readable by your system account only, but not encrypted, and the settings page says so and why.
+
+**Watching an address**: "+ Watch an address" asks for the address and, if you want, the words to watch for; "Read it once" shows what it finds before you save it, then "Save and look once".
 
 **Adding a mail account**: "+ Add a mail account" opens a short guide. The address picks the provider; it says where to turn on IMAP and get the app password, with a button that opens that page; it warns when the password has the wrong length; "Test and save" keeps only an account that connects.
 
@@ -205,7 +231,7 @@ A thread of replies is one item. Once you read it in your mail client, its item 
 
 **The board**: click "Secretary" in DSH's left sidebar to open a full-page board. On top: one summary sentence and four numbers (to handle, due in 7 days, closed today, to review). Below, three columns:
 
-Filter the board by source: All, GitHub, Mail, Noted.
+Filter the board by source: All, GitHub, Mail, Watching, Noted.
 
 - **To handle**: what needs you now. Cards stay folded and show only the title; click a title to unfold it — one at a time, so opening another folds the first. Unfolded, a card says **what it is, where the problem is and what to do** (for a failing CI: which job and step, when it last passed), and its main button opens the right place ("Open the failing log", "Turn off Actions", "Review it"), next to done, tomorrow and dismiss.
 - **Keeping for you**: things you put off until tomorrow, and things you told it that are not due for a reminder yet. Add a new one at the bottom, with a live preview of what was understood.
@@ -217,7 +243,7 @@ Cards can be dragged: onto "Done for you" to mark done, onto "Keeping for you" t
 
 **Settings**: the "Settings" tab at the top of the page: language, warning days per category, GitHub (on/off, where the token comes from, connection test, how to mark read), mail accounts (add, test, check now, edit, delete). Every block is a folded card that shows only its title until you click it, and only one is open at a time; mail accounts and notification channels fold the same way, with their switch on the title row so you can flip it without opening the card.
 
-The settings follow the secretary's job in four parts: 1. where it looks (GitHub, mail); 2. what to tell you about (what counts as urgent, warning days per category); 3. when and how to tell you (reminders, below); 4. what it may do for you (marking read on GitHub; mail is always read-only). Then language and where secrets are kept.
+The settings follow the secretary's job in four parts: 1. where it looks (GitHub, mail, addresses you watch); 2. what to tell you about (what counts as urgent, warning days per category); 3. when and how to tell you (reminders, below); 4. what it may do for you (marking read on GitHub; mail is always read-only). Then language and where secrets are kept.
 
 **Reminders**, without opening the board:
 - Daily brief: at its time (09:00 by default) a list of what needs you and what is coming up; nothing is sent when there is nothing.

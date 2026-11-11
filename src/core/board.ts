@@ -15,6 +15,7 @@ import { decode, type Lang } from './i18n.ts'
 import { manualExplain, storedExplain, type CardExplain } from './explain.ts'
 import { isActive } from './matters.ts'
 import { mailReportKey, type MailSyncReport } from './mail/sync.ts'
+import { watchReportKey, type WatchReport } from './watch/source.ts'
 import { CATEGORY_LABELS, describeRepeat, occurrence, remindDay, type Category } from './recur.ts'
 import type { Matter, MishuStore } from './store.ts'
 import { addDays, dayOf, dayStart, daysBetween, formatMoment, relativeDay, weekday } from './time.ts'
@@ -25,7 +26,7 @@ export interface BoardCard {
   /** Matter id, or series id for a series card. */
   id: number
   target: 'matter' | 'series'
-  source: 'github' | 'mail' | 'manual'
+  source: 'github' | 'mail' | 'manual' | 'watch'
   title: string
   /** One short line: when it is due, or why it is here. */
   meta: string
@@ -52,6 +53,7 @@ export interface BoardData {
     github: { state: 'off' | 'never' | 'ok' | 'error'; text: string }
     manual: { series: number }
     mail: Array<{ id: number; label: string; state: 'never' | 'ok' | 'error'; text: string }>
+    watch: Array<{ id: number; label: string; state: 'never' | 'ok' | 'error'; text: string }>
   }
   markRead: MarkReadMode
   columns: { handle: BoardCard[]; remember: BoardCard[]; done: { total: number; groups: DoneGroup[] } }
@@ -65,6 +67,8 @@ export interface BoardOptions {
   doneDays?: number
   /** Mail accounts, for their status line. */
   mailAccounts?: Array<{ id: number; label: string }>
+  /** Things you watch yourself, for their status line. */
+  watches?: Array<{ id: number; label: string }>
 }
 
 const zhOr = (lang: Lang, zh: string, en: string) => (lang === 'zh' ? zh : en)
@@ -91,7 +95,7 @@ function matterCard(store: MishuStore, m: Matter, today: string, now: number, la
     else if (daysBetween(today, m.dueDay) <= 1) tone = 'warn'
   } else {
     const label = CATEGORY_LABELS[m.kind as Category]
-    const where = m.source === 'mail' ? zhOr(lang, '邮件', 'Mail') : 'GitHub'
+    const where = m.source === 'mail' ? zhOr(lang, '邮件', 'Mail') : m.source === 'watch' ? zhOr(lang, '关注', 'Watching') : 'GitHub'
     meta = manual && label !== undefined ? label[lang] : `${where} · ${reasonLabel(m.reason, lang)}`
   }
   const actions: CardAction[] = column === 'handle'
@@ -109,7 +113,8 @@ function matterCard(store: MishuStore, m: Matter, today: string, now: number, la
     explain.why += zhOr(lang, `你说了"明天再说"，${m.snoozeUntil} 会回到"要你处理"。`, ` You put it off; it comes back on ${m.snoozeUntil}.`)
   }
   // The open button says what it opens ("Turn off Actions", "Open the failing log").
-  return { id: m.id, target: 'matter', source: manual ? 'manual' : m.source === 'mail' ? 'mail' : 'github', title, meta, note: note === '' ? null : note, url: explain?.link?.url ?? m.url, tone, actions, explain }
+  const source: BoardCard['source'] = manual ? 'manual' : m.source === 'mail' ? 'mail' : m.source === 'watch' ? 'watch' : 'github'
+  return { id: m.id, target: 'matter', source, title, meta, note: note === '' ? null : note, url: explain?.link?.url ?? m.url, tone, actions, explain }
 }
 
 export function buildBoard(store: MishuStore, options: BoardOptions): BoardData {
@@ -170,6 +175,12 @@ export function buildBoard(store: MishuStore, options: BoardOptions): BoardData 
     if (report.error !== undefined) return { id: account.id, label: account.label, state: 'error', text: zhOr(lang, `${account.label}：${report.error.zh}`, `${account.label}: ${report.error.en}`) }
     return { id: account.id, label: account.label, state: 'ok', text: zhOr(lang, `${account.label} ${formatMoment(report.at, now)} 收信`, `${account.label} checked ${formatMoment(report.at, now)}`) }
   })
+  const watch: BoardData['sources']['watch'] = (options.watches ?? []).map((source) => {
+    const report = store.get<WatchReport>(watchReportKey(source.id))
+    if (report === undefined) return { id: source.id, label: source.label, state: 'never', text: zhOr(lang, `${source.label} 还没看过`, `${source.label} not checked yet`) }
+    if (report.error !== undefined) return { id: source.id, label: source.label, state: 'error', text: zhOr(lang, `${source.label}：${report.error.zh}`, `${source.label}: ${report.error.en}`) }
+    return { id: source.id, label: source.label, state: 'ok', text: zhOr(lang, `${source.label} ${formatMoment(report.at, now)} 看过`, `${source.label} checked ${formatMoment(report.at, now)}`) }
+  })
   const github: BoardData['sources']['github'] = !options.github.enabled
     ? { state: 'off', text: zhOr(lang, 'GitHub 未开启', 'GitHub off') }
     : last === undefined
@@ -189,13 +200,14 @@ export function buildBoard(store: MishuStore, options: BoardOptions): BoardData 
   if (closedToday > 0) parts.push(zhOr(lang, `今天替你关掉了 ${closedToday} 件，理由都在右栏。`, `Closed ${closedToday} for you today; the reasons are on the right.`))
   if (github.state === 'error') parts.push(zhOr(lang, 'GitHub 这次没同步成。', 'The last GitHub sync failed.'))
   for (const box of mail.filter(b => b.state === 'error')) parts.push(zhOr(lang, `邮箱「${box.label}」这次没收成。`, `Mail "${box.label}" could not be checked.`))
+  for (const box of watch.filter(b => b.state === 'error')) parts.push(zhOr(lang, `关注「${box.label}」这次没读成。`, `Watch "${box.label}" could not be read.`))
 
   return {
     lang,
     at: now,
     summary: parts.join(lang === 'zh' ? '' : ' '),
     metrics: { handle: handle.length, overdue, dueSoon, closedToday, shadow },
-    sources: { github, manual: { series: store.activeSeries().length }, mail },
+    sources: { github, manual: { series: store.activeSeries().length }, mail, watch },
     markRead: options.github.markRead,
     columns: {
       handle: handle.map(m => matterCard(store, m, today, now, lang, 'handle')),

@@ -10,6 +10,7 @@ import {
   buildBoard, DesktopChannel, FeishuChannel, FileSecrets, GithubDeviceLogin, KeychainOrFile, notifySettings, notifyTick, mishuPaths, resolveGithubToken, secretAccount, secretFromEnv, syncGithub, syncMail, systemSecrets, tickManual, bi,
   type Defaults, type GithubSyncReport, type Lang, type MailAccount, type MailFetcher, type MailSyncReport, type MishuStore,
   restartPlan, scheduleRestart, type Channel, type ChannelId, type NotifyReport, type RestartPlan, type RestartStarted, type SecretStore, type TokenResult,
+  dueWatches, httpFetch, syncWatch, watchReportKey, watchSources, type WatchFetch, type WatchReport, type WatchSource,
 } from '../core/index.ts'
 import type { MishuConfig } from './config.ts'
 
@@ -20,6 +21,8 @@ export class Runtime {
   readonly config: MishuConfig
   readonly secrets: SecretStore
   readonly fetcher: MailFetcher
+  /** How watched addresses are read; tests swap it for a fake. */
+  watchFetch: WatchFetch = httpFetch
   private readonly logger: Logger
   private syncing: Promise<void> | undefined
   /** Where reminders can go; tests swap them for recorders. */
@@ -66,6 +69,10 @@ export class Runtime {
     return this.store === undefined ? [] : mailAccounts(this.store)
   }
 
+  watches(): WatchSource[] {
+    return this.store === undefined ? [] : watchSources(this.store)
+  }
+
   brief(lang: Lang = this.lang()): string {
     const store = this.store
     if (store === undefined) return lang === 'zh' ? '小秘书的记事本没有打开' : 'The secretary\'s notebook is not open'
@@ -76,6 +83,7 @@ export class Runtime {
       now, lang, upcomingDays: this.config.upcomingDays,
       github: { enabled: settings.githubEnabled, markRead: settings.markRead },
       mailAccounts: this.accounts(),
+      watches: this.watches(),
     })
   }
 
@@ -131,6 +139,15 @@ export class Runtime {
     return report
   }
 
+  /** One watch; the result is also kept as its last report. */
+  async syncWatchSource(source: WatchSource): Promise<WatchReport | undefined> {
+    const store = this.store
+    if (store === undefined) return undefined
+    const report = await syncWatch({ store, source, fetcher: this.watchFetch, now: Date.now() })
+    this.logger.info(`dsh-mishu: watch #${source.id} ${report.error === undefined ? `ok (${report.items} items, +${report.opened} open, ${report.closed} closed)` : 'failed'}`)
+    return report
+  }
+
   /** The channels that are turned on and work on this computer. */
   async activeChannels(): Promise<Channel[]> {
     const store = this.store
@@ -146,7 +163,7 @@ export class Runtime {
   /** The board as the brief describes it. */
   board(now: number, lang: Lang = this.lang()) {
     const settings = this.settings()
-    return buildBoard(this.store!, { now, lang, github: { enabled: settings.githubEnabled, markRead: settings.markRead }, mailAccounts: this.accounts() })
+    return buildBoard(this.store!, { now, lang, github: { enabled: settings.githubEnabled, markRead: settings.markRead }, mailAccounts: this.accounts(), watches: this.watches() })
   }
 
   /** Send what is due now: urgent items, the daily brief. One at a time. */
@@ -171,6 +188,9 @@ export class Runtime {
       await this.syncGithubNow(store).catch(error => this.logger.warn(`dsh-mishu: github sync failed (${(error as Error).message})`))
       for (const account of this.accounts().filter(a => a.enabled)) {
         await this.syncMailAccount(account).catch(error => this.logger.warn(`dsh-mishu: mail #${account.id} sync failed (${(error as Error).message})`))
+      }
+      for (const source of dueWatches(store, Date.now())) {
+        await this.syncWatchSource(source).catch(error => this.logger.warn(`dsh-mishu: watch #${source.id} failed (${(error as Error).message})`))
       }
       // What the sync turned up may be urgent.
       await this.notify()

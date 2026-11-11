@@ -19,6 +19,8 @@ import { isActive } from './matters.ts'
 import { CATEGORY_LABELS, describeRepeat, occurrence, remindDay } from './recur.ts'
 import type { MishuStore } from './store.ts'
 import { dayOf, formatMoment } from './time.ts'
+import { watchById, watchReportKey } from './watch/source.ts'
+import type { WatchReport } from './watch/source.ts'
 
 export type AskRequest =
   | { kind: 'matter'; id: number }
@@ -27,6 +29,8 @@ export type AskRequest =
   | { kind: 'github-error' }
   | { kind: 'mail-error'; accountId: number }
   | { kind: 'mail-setup'; preset: string; error?: string }
+  | { kind: 'watch-error'; watchId: number }
+  | { kind: 'watch-setup' }
 
 export interface AskOptions {
   now: number
@@ -150,6 +154,22 @@ export function buildAsk(store: MishuStore, request: AskRequest, options: AskOpt
       return zh
         ? `我想让小秘书只读地查看我的「${preset.label.zh}」收件箱，需要开通 IMAP 并拿到客户端授权码（或应用专用密码）。请一步步教我怎么做，包括在网页上点哪里、要注意什么。\n\n小秘书给的说明：${preset.howTo.zh}\nIMAP 服务器：${preset.host || '（自己填）'}:${preset.port}${lines('\n测试连接时报错：', request.error)}`
         : `I want my secretary to read my ${preset.label.en} inbox (read-only), which needs IMAP turned on and an app password. Walk me through it step by step, including where to click and what to watch out for.\n\nThe secretary's note: ${preset.howTo.en}\nIMAP server: ${preset.host || '(enter your own)'}:${preset.port}${lines('\nThe connection test said: ', request.error)}`
+    }
+
+    case 'watch-error': {
+      const source = watchById(store, request.watchId)
+      if (source === undefined) throw notFound()
+      const report = store.get<WatchReport>(watchReportKey(source.id))
+      const error = report?.error?.[lang] ?? (zh ? '（没有记录到错误）' : '(no error recorded)')
+      return zh
+        ? `我让小秘书盯着「${source.label}」这个网址，但它读不到内容，帮我弄明白原因、怎么解决：\n\n网址：${source.url}\n多久看一次：${source.intervalMinutes} 分钟\n我关注的字：${source.keywords.length === 0 ? '（没设，有任何变化就告诉我）' : source.keywords.join('、')}\n报错：${error}\n\n小秘书是怎么读的：普通 GET，20 秒超时，能读 RSS/Atom、JSON 列表或普通网页。如果这个网站要登录才能看，或者防爬，告诉我该怎么办。`
+        : `I asked my secretary to keep an eye on ${source.url}, but it cannot read it. Help me understand why and what to do:\n\nAddress: ${source.url}\nCheck every: ${source.intervalMinutes} minutes\nWords I watch for: ${source.keywords.length === 0 ? '(none — tell me about any change)' : source.keywords.join(', ')}\nError: ${error}\n\nHow it reads: a plain GET with a 20-second timeout, working on RSS/Atom, a JSON list or a plain page. If the site needs a login or blocks robots, tell me what to do instead.`
+    }
+
+    case 'watch-setup': {
+      return zh
+        ? '我想让小秘书帮我盯着一些我自己关心的东西：某个公告页、某个商品的价格、某个职位的招聘页、某个订阅源。请告诉我：哪些网址它读得到、哪些读不到（要登录的、全靠 JS 渲染的、防爬的），RSS 和普通网页分别会怎么处理，关键词该怎么写才能不漏也不吵，检查间隔设多长合适。'
+        : 'I want my secretary to watch a few things I care about myself: a page of announcements, the price of something, a job posting, a feed. Tell me which addresses it can read and which it cannot (login walls, JS-only pages, bot blocking), how it treats a feed versus a plain page, how to write the words I watch for so nothing is missed and nothing is noisy, and how often to check.'
     }
   }
 }

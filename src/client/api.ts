@@ -49,6 +49,8 @@ export type AskTopic =
   | { kind: 'github-error' }
   | { kind: 'mail-error'; accountId: number }
   | { kind: 'mail-setup'; preset: string; error?: string }
+  | { kind: 'watch-error'; watchId: number }
+  | { kind: 'watch-setup' }
 
 export interface AccountView {
   id: number
@@ -81,6 +83,37 @@ export interface PresetView {
   passwordLength: number | null
 }
 
+export interface WatchView {
+  id: number
+  label: string
+  url: string
+  keywords: string
+  enabled: boolean
+  intervalMinutes: number
+  /** "checked 3 hours ago, 12 entries" or the error. */
+  status: string
+  /** "tell me when it mentions …" */
+  summary: string
+  report: { at: number; items: number; opened: number; closed: number; error?: { zh: string; en: string } } | null
+}
+
+export interface WatchDraft {
+  id?: number
+  label: string
+  url: string
+  keywords: string
+  enabled: boolean
+  intervalMinutes: number
+}
+
+export interface WatchTest {
+  items: number
+  title: string
+  excerpt: string
+  keywordHit?: boolean
+  keyword?: string
+}
+
 export interface SettingsView {
   lang: 'zh' | 'en'
   settings: {
@@ -98,6 +131,7 @@ export interface SettingsView {
   }
   secrets: { kind: string; available: boolean; why?: string; file?: { path: string; why: string } }
   accounts: AccountView[]
+  watches: WatchView[]
   notify: {
     settings: NotifySettingsView
     channels: Array<{ id: 'desktop' | 'feishu'; enabled: boolean; available: boolean; why?: string }>
@@ -145,4 +179,8 @@ export const settingsApi = {
   testMail: (lang: string, account: AccountDraft, password: string) => post<{ unread: number }>('/mail/test', { lang, account, password }),
   deleteMail: (lang: string, id: number) => post<{ view: SettingsView }>('/mail/delete', { lang, id }),
   syncMail: (lang: string, id: number) => post<{ view: SettingsView }>('/mail/sync', { lang, id }),
+  saveWatch: (lang: string, watch: WatchDraft) => post<{ id: number; view: SettingsView }>('/watch/save', { lang, watch }),
+  testWatch: (lang: string, watch: WatchDraft) => post<WatchTest>('/watch/test', { lang, watch }),
+  deleteWatch: (lang: string, id: number) => post<{ view: SettingsView }>('/watch/delete', { lang, id }),
+  syncWatch: (lang: string, id: number) => post<{ board: BoardData; view: SettingsView }>('/watch/sync', { lang, id }),
 }

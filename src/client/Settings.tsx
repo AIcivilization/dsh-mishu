@@ -10,7 +10,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { AskAI, type OpenChat } from './AskAI.tsx'
-import { settingsApi, type AccountDraft, type AccountView, type DeviceView, type SettingsView } from './api.ts'
+import { settingsApi, type AccountDraft, type AccountView, type DeviceView, type SettingsView, type WatchDraft, type WatchTest, type WatchView } from './api.ts'
 import { Fold, FoldGroup } from './Fold.tsx'
 import { Modal } from './Modal.tsx'
 import { NotifySection } from './Notify.tsx'
@@ -28,6 +28,7 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
   const [confirmOn, setConfirmOn] = useState(false)
   const [pasting, setPasting] = useState(false)
   const [editing, setEditing] = useState<AccountDraft | undefined>()
+  const [watching, setWatching] = useState<WatchDraft | undefined>()
 
   const take = (result: { ok: true; view: SettingsView } | { ok: false; message: string }, saved?: string) => {
     if (result.ok) {
@@ -122,6 +123,19 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
         {editing === undefined ? null : (
           <MailDialog draft={editing} view={view} lang={lang} locale={locale} openChat={openChat}
             onDone={(next, note) => { setEditing(undefined); if (next !== undefined) take({ ok: true, view: next }, note ?? t.sSaved) }} />
+        )}
+
+        <h3>{t.sWatch}</h3>
+        <p className="mishu-hint">{t.sWatchHint}</p>
+        {view.watches.length === 0 ? <p className="mishu-empty">{t.sNoWatches}</p> : view.watches.map(watch => (
+          <WatchRow key={watch.id} watch={watch} lang={lang} locale={locale} openChat={openChat}
+            onEdit={() => setWatching({ ...watch })}
+            onView={next => take(next)} />
+        ))}
+        <button type="button" className="mishu-btn mishu-add-toggle" onClick={() => setWatching({ label: '', url: '', keywords: '', enabled: true, intervalMinutes: 60 })}>{t.sAddWatch}</button>
+        {watching === undefined ? null : (
+          <WatchDialog draft={watching} lang={lang} locale={locale} openChat={openChat}
+            onDone={(next, note) => { setWatching(undefined); if (next !== undefined) take({ ok: true, view: next }, note ?? t.sSaved) }} />
         )}
       </Fold>
 
@@ -460,4 +474,124 @@ function MailDialog({ draft, view, lang, locale, openChat, onDone }: {
       </div>
     </Modal>
   )
+}
+
+/** One watched address: what it is, how often it is read, and what it last found. */
+function WatchRow({ watch, lang, locale, openChat, onEdit, onView }: {
+  watch: WatchView; lang: UiLang; locale: () => string; openChat: OpenChat; onEdit: () => void
+  onView: (result: { ok: true; view: SettingsView } | { ok: false; message: string }) => void
+}) {
+  const t = TEXT[lang]
+  const [busy, setBusy] = useState(false)
+  const failed = watch.report?.error !== undefined
+  return (
+    <Fold id={`watch-${watch.id}`} title={`${watch.label}${watch.enabled ? '' : ` (${t.wDisabled})`}`}>
+      <div className="mishu-card-meta">{watch.url} · {t.wEveryUnit(watch.intervalMinutes)}</div>
+      <div className="mishu-card-meta">{watch.summary}</div>
+      <div className={`mishu-card-note ${failed ? 'mishu-danger' : ''}`}>
+        {watch.status}
+        {failed ? <AskAI topic={{ kind: 'watch-error', watchId: watch.id }} lang={lang} locale={locale} openChat={openChat} compact /> : null}
+      </div>
+      <div className="mishu-actions">
+        <button type="button" className="mishu-btn" disabled={busy} onClick={() => { setBusy(true); void settingsApi.syncWatch(locale(), watch.id).then((r) => { setBusy(false); onView(r) }) }}>{busy ? t.wTesting : t.wCheckNow}</button>
+        <button type="button" className="mishu-btn" onClick={onEdit}>{t.sEdit}</button>
+        <button type="button" className="mishu-btn mishu-btn-quiet" onClick={() => {
+          if (window.confirm(t.wDeleteConfirm)) void settingsApi.deleteWatch(locale(), watch.id).then(onView)
+        }}>{t.sDelete}</button>
+      </div>
+    </Fold>
+  )
+}
+
+/**
+ * Add or edit a watch. "Read it once" is the important button: a feed, a page
+ * and a login wall look the same until you try, and the answer says which.
+ */
+function WatchDialog({ draft, lang, locale, openChat, onDone }: {
+  draft: WatchDraft; lang: UiLang; locale: () => string; openChat: OpenChat
+  onDone: (view?: SettingsView, note?: string) => void
+}) {
+  const t = TEXT[lang]
+  const existing = draft.id !== undefined
+  const [watch, setWatch] = useState<WatchDraft>(draft)
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | undefined>()
+  const [tested, setTested] = useState<WatchTest | undefined>()
+  const [busy, setBusy] = useState(false)
+  const set = (patch: Partial<WatchDraft>) => { setWatch({ ...watch, ...patch }); setMessage(undefined); setTested(undefined) }
+
+  const save = async (thenCheck = false) => {
+    setBusy(true)
+    const r = await settingsApi.saveWatch(locale(), watch)
+    if (!r.ok) { setBusy(false); setMessage({ ok: false, text: r.message }); return }
+    // "Save and look once": the check's own answer is the one to show, so the
+    // row says what was found rather than "not checked yet".
+    let view = r.view
+    if (thenCheck) {
+      const checked = await settingsApi.syncWatch(locale(), r.id)
+      if (checked.ok) view = checked.view
+    }
+    setBusy(false)
+    onDone(view, t.sSaved)
+  }
+  const test = async () => {
+    setBusy(true)
+    setMessage({ ok: true, text: t.wTesting })
+    const r = await settingsApi.testWatch(locale(), watch)
+    setBusy(false)
+    if (!r.ok) { setMessage({ ok: false, text: r.message }); return }
+    setTested(r)
+    const hit = r.keywordHit === undefined ? undefined : r.keyword
+    setMessage({
+      ok: true,
+      text: r.keywordHit === false && hit !== undefined
+        ? `${t.wTestOk(r.items, r.title)} ${t.wTestNoHit(hit)}`
+        : r.keywordHit === true && hit !== undefined ? `${t.wTestOk(r.items, r.title)} ${t.wTestHit(hit)}` : t.wTestOk(r.items, r.title),
+    })
+  }
+
+  return (
+    <Modal title={existing ? t.wTitleEdit : t.wTitleAdd} onClose={() => onDone()}>
+      <label className="mishu-field">{t.wUrl}
+        <input value={watch.url} autoComplete="off" autoFocus={!existing} placeholder="https://example.com/news.xml" onChange={e => set({ url: e.target.value })} />
+      </label>
+      <p className="mishu-hint">{t.wUrlHint}</p>
+      <label className="mishu-field">{t.wLabel}
+        <input value={watch.label} placeholder={hostOf(watch.url)} onChange={e => set({ label: e.target.value })} />
+      </label>
+      <label className="mishu-field">{t.wKeywords}
+        <input value={watch.keywords} placeholder={lang === 'zh' ? '上新, 补丁, 面试' : 'release, patch, interview'} onChange={e => set({ keywords: e.target.value })} />
+      </label>
+      <p className="mishu-hint">{t.wKeywordsHint}</p>
+      <div className="mishu-row">
+        <label className="mishu-field">{t.wEvery}
+          <input type="number" min={15} max={1440} step={15} value={watch.intervalMinutes} onChange={e => set({ intervalMinutes: Number(e.target.value) })} />
+        </label>
+        <label className="mishu-check"><input type="checkbox" checked={watch.enabled} onChange={e => set({ enabled: e.target.checked })} />{t.sEnabled}</label>
+      </div>
+      {tested === undefined ? null : tested.excerpt === '' ? null : (
+        <div className="mishu-preview">{tested.excerpt}</div>
+      )}
+      {message === undefined ? null : (
+        <div className={`mishu-preview ${message.ok ? '' : 'mishu-danger'}`}>
+          {message.text}
+          {message.ok ? null : <AskAI topic={{ kind: 'watch-setup' }} lang={lang} locale={locale} openChat={openChat} compact />}
+        </div>
+      )}
+      <div className="mishu-actions">
+        <button type="button" className="mishu-btn" disabled={busy || watch.url.trim() === ''} onClick={() => { void test() }}>{t.wTest}</button>
+        <button type="button" className="mishu-btn primary" disabled={busy || watch.url.trim() === ''} onClick={() => { void save(true) }}>{busy ? t.wTesting : t.wSaveAndCheck}</button>
+        <button type="button" className="mishu-btn" onClick={() => onDone()}>{t.sCancel}</button>
+      </div>
+      {existing ? null : <p className="mishu-hint">{t.wAskSetup} <AskAI topic={{ kind: 'watch-setup' }} lang={lang} locale={locale} openChat={openChat} compact /></p>}
+    </Modal>
+  )
+}
+
+/** The host of an address, as a placeholder name while you type one. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return ''
+  }
 }
