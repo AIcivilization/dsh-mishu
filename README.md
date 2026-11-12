@@ -95,6 +95,8 @@
 - 时间按你浏览器所在的时区算，DSH 跑在别的时区的服务器上也不会错。
 - 发到：这台电脑的系统通知（macOS、Windows、Linux 桌面；服务器上没有），以及飞书群机器人（建一个只有你的群、加一个自定义机器人，把 Webhook 地址粘贴过来；支持签名校验）。飞书的地址和密钥当密码存；提醒内容会经过飞书的服务器。
 
+**交给 DSH 的自动化任务**：设置页 ③ 里还有一个开关，把每日简报改成 DSH 自己的定时任务——到点它不弹通知，而是在 DSH 里出现一条对话，你下次打开就能看见，手机上装 DSH 客户端也一样。这一条用的是 DSH 自带的 `schedule` 服务，小秘书只建这一个任务，标题是"小秘书 · 每日简报"；改简报时间会跟着改，取消就删掉。下面同时列出 DSH 里所有定时任务（包括你自己在"自动化任务"页建的），每个都能"现在跑一次"或删除。DSH 没装这个服务时，这一块只说一句"这个 DSH 没有自动化任务服务"，不影响桌面通知。
+
 **重启 DSH**：页面顶部"设置"后面的按键。重装或升级插件后点它，桌面版会按正常方式退出（有任务在跑时会先问你），再自动打开。用 dsh-vps 装在服务器上的 DSH，由 dsh-gate 网关托管：点了之后 DSH 正常退出，网关几秒内把它重新拉起，页面断开一会儿后自动刷新。直接用 `dsh` 命令启动的 DSH 没法从页面重启（新的登录地址只会打印在那个终端里），按键会告诉你回终端按 Ctrl+C 再运行一次。Windows 和 Linux 桌面版的重启还没在真机上测过。
 
 **文字命令**：
@@ -251,6 +253,8 @@ The settings follow the secretary's job in four parts: 1. where it looks (GitHub
 - Quiet hours (22:00 to 08:00 by default): nothing is sent; urgent items from then come when they end.
 - Times follow your browser's time zone, so DSH on a server in another zone still gets them right.
 - Sent to this computer's notifications (macOS, Windows, a Linux desktop; a server has none) and to a Feishu / Lark group bot (a group of just you, a custom bot, its webhook address pasted in; signature verification supported). The bot's address and secret are kept like passwords; what reminders say passes through Feishu's servers.
+
+**Handing the brief to DSH's scheduled tasks**: part 3 of the settings page can turn the daily brief into one of DSH's own scheduled tasks — instead of a notification it arrives as a conversation turn, there the next time you open DSH (including the mobile client). It uses DSH's built-in `schedule` service; the secretary creates exactly one task, titled "Secretary · daily brief", moves it when you change the brief's time, and deletes it when you turn it off. Below it, every scheduled task on this DSH is listed — including ones you made on DSH's own automation page — each with "run now" and delete. A DSH without that service says so in one line and keeps the desktop notification.
 
 **Restart DSH**: the button after "Settings" at the top of the page. After reinstalling or upgrading plugins, click it: the desktop app quits the normal way (asking first if a task is running) and opens again. On a server set up with dsh-vps, DSH runs under the dsh-gate gateway: DSH exits cleanly, the gateway starts it again within seconds, and the page reloads once it is back. DSH started directly with the `dsh` command cannot be restarted from the page (its new sign-in address is printed only in that terminal), so the button tells you to press Ctrl+C there and run it again. Restarting the Windows and Linux desktop apps is not yet tested on real machines.
 

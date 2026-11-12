@@ -16,6 +16,7 @@ import {
 import type { MishuConfig } from './config.ts'
 import { API_BASE, apiHandlers, handle } from './api.ts'
 import { Runtime } from './runtime.ts'
+import type { ScheduleLike } from './schedule.ts'
 import { ADD_TOOL, addApproval, describeChange, registerTools } from './tools.ts'
 
 interface CommandsLike {
@@ -141,8 +142,16 @@ export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(c
     }
   })
 
-  ctx.inject(['commands'], (commandCtx) => {
-    const commands = (commandCtx as unknown as { commands: CommandsLike }).commands
+  // DSH's own scheduled tasks ("自动化任务"). Optional: a Host without the
+  // service simply keeps the brief as a desktop notification.
+  ctx.inject(['schedule'], (scheduleCtx) => {
+    const service = (scheduleCtx as unknown as { schedule: ScheduleLike }).schedule
+    if (service === undefined || service === null) return
+    runtime.attachSchedule(service)
+    scheduleCtx.effect(() => () => { runtime.schedule = undefined })
+  })
+
+  ctx.inject(['commands'], (commandCtx) => {    const commands = (commandCtx as unknown as { commands: CommandsLike }).commands
     commandCtx.effect(() => commands.register({
       name: 'mishu',
       description: 'Secretary · 小秘书: brief, sync, done/dismiss/reopen items, closed items, series',

@@ -14,6 +14,7 @@ import { settingsApi, type AccountDraft, type AccountView, type DeviceView, type
 import { Fold, FoldGroup } from './Fold.tsx'
 import { Modal } from './Modal.tsx'
 import { NotifySection } from './Notify.tsx'
+import { ScheduleSection } from './Schedule.tsx'
 import { TEXT, type UiLang } from './text.ts'
 
 const CATEGORIES = ['document', 'bill', 'birthday', 'renewal', 'other'] as const
@@ -154,6 +155,7 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
 
       <Fold id="when" className="mishu-panel" title={t.bWhen}>
         <NotifySection view={view} lang={lang} locale={locale} take={take} />
+        <ScheduleSection view={view} lang={lang} locale={locale} take={take} />
       </Fold>
 
       <Fold id="do" className="mishu-panel" title={t.bDo}>

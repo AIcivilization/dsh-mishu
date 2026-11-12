@@ -139,6 +139,26 @@ export interface SettingsView {
     last: { at: number; kind: 'brief' | 'urgent' | 'test'; count: number; results: Array<{ channel: string; ok: boolean; error?: string }> } | null
   }
   presets: PresetView[]
+  /** DSH's own scheduled tasks; null when this Host has no Schedule service. */
+  schedule: ScheduleView | null
+}
+
+export interface ScheduleTaskView {
+  id: string
+  title: string
+  when: string
+  next: string | null
+  status: 'active' | 'paused' | 'ended'
+  prompt: string
+  mine: boolean
+  running: boolean
+  lastDelivery: string | null
+}
+
+export interface ScheduleView {
+  available: boolean
+  tasks: ScheduleTaskView[]
+  brief: { id: string | null; time: string; timeZone: string; armed: boolean; error: string | null }
 }
 
 export type AccountDraft = Partial<Omit<AccountView, 'hasPassword' | 'envName' | 'report' | 'mismatch'>>
@@ -183,4 +203,8 @@ export const settingsApi = {
   testWatch: (lang: string, watch: WatchDraft) => post<WatchTest>('/watch/test', { lang, watch }),
   deleteWatch: (lang: string, id: number) => post<{ view: SettingsView }>('/watch/delete', { lang, id }),
   syncWatch: (lang: string, id: number) => post<{ board: BoardData; view: SettingsView }>('/watch/sync', { lang, id }),
+  armBrief: (lang: string) => post<{ view: SettingsView; schedule: ScheduleView }>('/schedule/brief/arm', { lang }),
+  disarmBrief: (lang: string) => post<{ view: SettingsView; schedule: ScheduleView }>('/schedule/brief/disarm', { lang }),
+  runTask: (lang: string, id: string) => post<{ schedule: ScheduleView }>('/schedule/run', { lang, id }),
+  deleteTask: (lang: string, id: string) => post<{ schedule: ScheduleView }>('/schedule/delete', { lang, id }),
 }

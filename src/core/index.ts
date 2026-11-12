@@ -44,6 +44,10 @@ export {
 } from './watch/source.ts'
 export { describeWatchError, httpFetch, parseFeed, parseJson, parsePage, plainText, readWatchBody, type WatchFetch, type WatchItem } from './watch/fetch.ts'
 export { describeKeywords, describeWatch, diffItems, judgeWatch, syncWatch } from './watch/sync.ts'
+export {
+  BRIEF_MARK, BRIEF_TASK_KEY, briefPrompt, briefTiming, briefTitle, clockText, describeTiming, instantText, isBriefTask, sortTasks, taskView,
+  type BriefTiming, type ScheduleEntry, type ScheduleKind, type ScheduleTaskView,
+} from './schedule/tasks.ts'
 
 export const DEFAULT_HOME = '~/.mishu'
 

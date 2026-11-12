@@ -10,9 +10,10 @@ import {
   buildBoard, DesktopChannel, FeishuChannel, FileSecrets, GithubDeviceLogin, KeychainOrFile, notifySettings, notifyTick, mishuPaths, resolveGithubToken, secretAccount, secretFromEnv, syncGithub, syncMail, systemSecrets, tickManual, bi,
   type Defaults, type GithubSyncReport, type Lang, type MailAccount, type MailFetcher, type MailSyncReport, type MishuStore,
   restartPlan, scheduleRestart, type Channel, type ChannelId, type NotifyReport, type RestartPlan, type RestartStarted, type SecretStore, type TokenResult,
-  dueWatches, httpFetch, syncWatch, watchReportKey, watchSources, type WatchFetch, type WatchReport, type WatchSource,
+  dueWatches, httpFetch, syncWatch, watchReportKey, watchSources, DEFAULT_NOTIFY, type WatchFetch, type WatchReport, type WatchSource,
 } from '../core/index.ts'
 import type { MishuConfig } from './config.ts'
+import { ScheduleBridge, type ScheduleLike } from './schedule.ts'
 
 interface Logger { info(message: string): void; warn(message: string): void }
 
@@ -32,6 +33,11 @@ export class Runtime {
   githubLogin: GithubDeviceLogin
   /** How DSH restarts; tests swap it so they never restart anything. */
   restarter: { plan(): RestartPlan; schedule(plan: Exclude<RestartPlan, { kind: 'none' }>): RestartStarted } = { plan: () => restartPlan(), schedule: plan => scheduleRestart(plan) }
+  /**
+   * DSH's own scheduled tasks, when this Host has them. Attached by the shell
+   * once the `schedule` service shows up; absent on a Host without it.
+   */
+  schedule: ScheduleBridge | undefined
 
   constructor(
     config: MishuConfig,
@@ -71,6 +77,29 @@ export class Runtime {
 
   watches(): WatchSource[] {
     return this.store === undefined ? [] : watchSources(this.store)
+  }
+
+  /**
+   * Wire in DSH's Schedule service, once. The bridge reads the brief's time
+   * from the reminder settings, so a brief moved on this page moves the task
+   * too. Called again with the same service (a service restart) keeps the
+   * bridge and hands it the new handle.
+   */
+  attachSchedule(service: ScheduleLike): ScheduleBridge {
+    if (this.schedule !== undefined) {
+      this.schedule.replace(service)
+      return this.schedule
+    }
+    this.schedule = new ScheduleBridge(
+      service,
+      () => this.store,
+      () => this.lang(),
+      () => {
+        const settings = this.store === undefined ? DEFAULT_NOTIFY : notifySettings(this.store)
+        return { time: settings.brief.time, timeZone: settings.timeZone }
+      },
+    )
+    return this.schedule
   }
 
   brief(lang: Lang = this.lang()): string {

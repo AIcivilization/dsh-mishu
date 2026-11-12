@@ -155,6 +155,13 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
         feishu: { configured: (await runtime.secrets.get(FEISHU_WEBHOOK).catch(() => undefined)) !== undefined },
         last: store.get(NOTIFY_REPORT_KEY) ?? null,
       },
+      // DSH's own scheduled tasks; null when this Host has no Schedule service.
+      // A failing service must not take the rest of the settings page down.
+      schedule: runtime.schedule === undefined ? null : await runtime.schedule.view(lang).catch(() => ({
+        available: true,
+        tasks: [],
+        brief: { id: null, time: notifySettings(store).brief.time, timeZone: notifySettings(store).timeZone, armed: false, error: lang === 'zh' ? '读不到 DSH 的自动化任务' : 'could not read DSH\'s scheduled tasks' },
+      })),
       presets: MAIL_PRESETS.map(p => ({
         id: p.id, label: p.label[lang], host: p.host, port: p.port, secure: p.secure, supported: p.supported, howTo: p.howTo[lang],
         domains: p.domains, passwordLength: p.passwordLength ?? null,
@@ -296,6 +303,8 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
     '/notify/save': async (body) => {
       const lang = langOf(body)
       saveNotifySettings(need(lang), (body.notify ?? {}) as Partial<NotifySettings>, clock())
+      // A brief that is also a scheduled task follows the time you just set.
+      await runtime.schedule?.followBrief(lang)
       return { view: await settingsView(lang) }
     },
 
@@ -415,8 +424,42 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       return { report: report ?? null, board: board(store, lang), view: await settingsView(lang) }
     },
 
-    /** Whether the page's "restart DSH" button can work here, and if not, what to do instead. */
-    '/restart/info': async (body) => {
+    // ── DSH's own scheduled tasks ─────────────────────────
+
+    /** Hand the daily brief to DSH's Schedule: it then arrives as a conversation, not a notification. */
+    '/schedule/brief/arm': async (body) => {
+      const lang = langOf(body)
+      const bridge = runtime.schedule
+      if (bridge === undefined) throw new ApiError(lang === 'zh' ? '这个 DSH 没有自动化任务服务，简报只会用桌面通知发' : 'This DSH has no scheduled tasks service; the brief stays a desktop notification')
+      // Arm first, then read the page back: the task list and the armed flag are only right afterwards.
+      const schedule = await bridge.armBrief(lang)
+      return { view: await settingsView(lang), schedule }
+    },
+
+    '/schedule/brief/disarm': async (body) => {
+      const lang = langOf(body)
+      const bridge = runtime.schedule
+      if (bridge === undefined) throw new ApiError(lang === 'zh' ? '这个 DSH 没有自动化任务服务' : 'This DSH has no scheduled tasks service')
+      const schedule = await bridge.disarmBrief(lang)
+      return { view: await settingsView(lang), schedule }
+    },
+
+    /** Run any task now. */
+    '/schedule/run': async (body) => {
+      const lang = langOf(body)
+      const bridge = runtime.schedule
+      if (bridge === undefined) throw new ApiError(lang === 'zh' ? '这个 DSH 没有自动化任务服务' : 'This DSH has no scheduled tasks service')
+      return { schedule: await bridge.run(String(body.id ?? ''), lang) }
+    },
+
+    '/schedule/delete': async (body) => {
+      const lang = langOf(body)
+      const bridge = runtime.schedule
+      if (bridge === undefined) throw new ApiError(lang === 'zh' ? '这个 DSH 没有自动化任务服务' : 'This DSH has no scheduled tasks service')
+      return { schedule: await bridge.delete(String(body.id ?? ''), lang) }
+    },
+
+    /** Whether the page's "restart DSH" button can work here, and if not, what to do instead. */    '/restart/info': async (body) => {
       const plan = runtime.restarter.plan()
       return plan.kind === 'none' ? { supported: false, why: plan.why[langOf(body)] } : { supported: true }
     },
