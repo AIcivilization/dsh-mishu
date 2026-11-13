@@ -10,15 +10,20 @@
  * returns one.
  */
 
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
   describeWatchError,
   addDays, addSeries, bi, deleteFeishu, deliver, FEISHU_WEBHOOK, notifySettings, NOTIFY_REPORT_KEY, saveFeishu, saveNotifySettings, testMessage, buildAsk, buildBoard, buildDetail, dayOf, deleteGithubToken, deleteMailAccount, describeMailError, MishuError, describeSeries, detectLang, errorText, GitHubClient,
   MAIL_PRESETS, mailReportKey, NEW_TOKEN_URL, normalizePassword, providerMismatch, resolveSeries, saveGithubToken, saveMailAccount, saveSettings, secretAccount, secretEnvName,
+  sanitizeFilename, uniqueFilename, mishuPaths, parseAddressList, replyTargets, forwardSubject, replySubject,
   setStatusByUser, snoozeByUser, stopSeries, tickManual,
-  type AskRequest, type BoardData, type ChannelId, type DeviceState, type NotifySettings, type Category, type Lang, type MailAccount, type MailSyncReport, type MishuStore, type SeriesInput, type UserSettings,
+  type AskRequest, type BoardData, type ChannelId, type DeviceState, type NotifySettings, type Category, type Lang, type MailAccount, type MailMarkAction, type MailSyncReport, type MishuStore, type SeriesInput, type UserSettings,
   deleteWatch, describeKeywords, describeWatch, parseKeywords, readWatchBody, resolveWatch, saveWatch, watchById, watchReportKey, watchSources, type WatchInput, type WatchReport, type WatchSource,
 } from '../core/index.ts'
-import { resolveAccount } from '../core/mail/account.ts'
+import { resolveAccount, smtpOf } from '../core/mail/account.ts'
+import { verifySmtp } from '../core/mail/send.ts'
+import { composeOf, pickAccount } from './mail-tools.ts'
 import type { Runtime } from './runtime.ts'
 
 export const API_BASE = '/api/dsh-mishu'
@@ -65,6 +70,9 @@ function accountInput(value: unknown): Partial<MailAccount> {
   if (text(a.user) !== undefined) out.user = text(a.user)!
   if (typeof a.enabled === 'boolean') out.enabled = a.enabled
   if (num(a.sinceDays) !== undefined) out.sinceDays = num(a.sinceDays)!
+  if (text(a.smtpHost) !== undefined) out.smtpHost = text(a.smtpHost)!
+  if (num(a.smtpPort) !== undefined) out.smtpPort = num(a.smtpPort)!
+  if (typeof a.smtpSecure === 'boolean') out.smtpSecure = a.smtpSecure
   return out
 }
 
@@ -116,6 +124,19 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
     })
   }
 
+  /** The account a request means: `id` when given, the only one when there is one. */
+  const mailAccount = (body: Body, lang: Lang): MailAccount => pickAccount(runtime.accounts(), Number(body.account ?? body.id) || undefined, lang)
+
+  /** Delete means "into Trash"; purge means gone for good and only counts inside Trash. */
+  const MARK_ACTIONS = ['read', 'unread', 'star', 'unstar', 'move', 'delete', 'purge'] as const
+  const markAction = (value: unknown, lang: Lang): MailMarkAction => {
+    const action = String(value ?? '')
+    if (!(MARK_ACTIONS as readonly string[]).includes(action)) {
+      throw new ApiError(lang === 'zh' ? '不认识这个操作' : 'unknown action')
+    }
+    return action as MailMarkAction
+  }
+
   /** Everything the settings page shows. No secret is ever included. */
   const settingsView = async (lang: Lang) => {
     const store = need(lang)
@@ -165,6 +186,7 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       presets: MAIL_PRESETS.map(p => ({
         id: p.id, label: p.label[lang], host: p.host, port: p.port, secure: p.secure, supported: p.supported, howTo: p.howTo[lang],
         domains: p.domains, passwordLength: p.passwordLength ?? null,
+        smtp: { host: p.smtp.host, port: p.smtp.port, secure: p.smtp.secure },
         steps: p.steps.map(step => ({ text: step.text[lang], ...step.link === undefined ? {} : { link: { url: step.link.url, label: step.link.label[lang] } } })),
       })),
     }
@@ -353,12 +375,25 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       const typed = password(body)
       const secret = typed !== undefined ? normalizePassword(draft.preset, typed) : input.id === undefined ? undefined : await runtime.mailPassword(input.id)
       if (secret === undefined) throw new ApiError(lang === 'zh' ? '先填密码（授权码）再测试' : 'Enter the password (app password) first')
+      let unread = 0
       try {
         const messages = await runtime.fetcher.unread(draft, secret, draft.sinceDays, clock())
-        return { unread: messages.length }
+        unread = messages.length
       } catch (error) {
         // The dialog shows the provider's steps already; the error only says what went wrong.
         throw new MishuError(describeMailError(error, draft, { steps: false }))
+      }
+      // Reading can work while sending does not (the SMTP password is a
+      // different switch at most providers), so say so instead of saving a
+      // mailbox that cannot answer anyone.
+      const smtp = smtpOf(draft)
+      if (smtp.host === '') return { unread, smtp: 'none' as const }
+      try {
+        await verifySmtp(draft, secret)
+        return { unread, smtp: 'ok' as const }
+      } catch (error) {
+        const why = error instanceof MishuError ? error.text[lang] : describeMailError(error, draft, { steps: false })[lang]
+        return { unread, smtp: 'failed' as const, smtpError: why }
       }
     },
 
@@ -469,6 +504,209 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       if (plan.kind === 'none') throw new ApiError(plan.why[langOf(body)])
       return { restarting: true, ...runtime.restarter.schedule(plan) }
     },
+
+    // ── reading, searching, writing mail ──────────────────
+
+    '/mail/list': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const page = await runtime.mailList(account.id, {
+        ...body.folder === undefined ? {} : { folder: String(body.folder) },
+        ...body.limit === undefined ? {} : { limit: Number(body.limit) },
+        ...body.offset === undefined ? {} : { offset: Number(body.offset) },
+        ...body.unreadOnly === undefined ? {} : { unreadOnly: body.unreadOnly === true },
+      })
+      return { page }
+    },
+
+    '/mail/read': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const uid = Number(body.uid)
+      if (!Number.isInteger(uid) || uid <= 0) throw new ApiError(langOf(body) === 'zh' ? '要说清是哪一封（uid）' : 'say which message (uid)')
+      const message = await runtime.mailRead(account.id, String(body.folder ?? 'INBOX'), uid, body.maxChars === undefined ? 20_000 : Number(body.maxChars))
+      return { message }
+    },
+
+    '/mail/search': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const query = typeof body.query === 'string' ? body.query.trim() : ''
+      if (query === '') throw new ApiError(langOf(body) === 'zh' ? '要搜什么？' : 'what should I look for?')
+      const fields = Array.isArray(body.fields)
+        ? body.fields.map(String).filter((f): f is 'subject' | 'from' | 'to' | 'cc' | 'body' => ['subject', 'from', 'to', 'cc', 'body'].includes(f))
+        : undefined
+      const found = await runtime.mailSearch(account.id, {
+        query,
+        ...body.folder === undefined ? {} : { folder: String(body.folder) },
+        ...fields === undefined || fields.length === 0 ? {} : { fields },
+        ...body.limit === undefined ? {} : { limit: Number(body.limit) },
+        ...body.bodyLimit === undefined ? {} : { bodyLimit: Number(body.bodyLimit) },
+      })
+      return { found }
+    },
+
+    '/mail/mark': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const uid = Number(body.uid)
+      const action = markAction(body.action, langOf(body))
+      const result = await runtime.mailMark(
+        account.id, String(body.folder ?? 'INBOX'), uid, action,
+        body.destination === undefined ? undefined : String(body.destination),
+      )
+      return { result }
+    },
+
+    /** The same actions over a batch, so twenty messages are one round trip. */
+    '/mail/mark/many': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const uids = Array.isArray(body.uids) ? body.uids.map(Number) : []
+      const action = markAction(body.action, langOf(body))
+      const results = await runtime.mailMarkMany(
+        account.id, String(body.folder ?? 'INBOX'), uids, action,
+        body.destination === undefined ? undefined : String(body.destination),
+      )
+      return { results }
+    },
+
+    '/mail/folders': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      return { folders: await runtime.mailFolders(account.id) }
+    },
+
+    /** Creating, renaming and deleting a folder all hand back the new list. */
+    '/mail/folder/create': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      return { folders: await runtime.mailCreateFolder(account.id, String(body.path ?? '')) }
+    },
+
+    '/mail/folder/rename': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      return { folders: await runtime.mailRenameFolder(account.id, String(body.from ?? ''), String(body.to ?? '')) }
+    },
+
+    '/mail/folder/delete': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      return { folders: await runtime.mailDeleteFolder(account.id, String(body.path ?? '')) }
+    },
+
+    /** Save one attachment under the secretary's own folder and say where. */
+    '/mail/attachment': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const uid = Number(body.uid)
+      const index = Number(body.index)
+      if (!Number.isInteger(uid) || uid <= 0 || !Number.isInteger(index) || index < 0) {
+        throw new ApiError(langOf(body) === 'zh' ? '要说清是哪一封、第几个附件' : 'say which message and which attachment')
+      }
+      const file = await runtime.mailAttachment(account.id, String(body.folder ?? 'INBOX'), uid, index)
+      const dir = mishuPaths(runtime.config.home).attachments
+      await mkdir(dir, { recursive: true, mode: 0o700 })
+      const path = join(dir, uniqueFilename(sanitizeFilename(file.filename), new Set()))
+      await writeFile(path, file.content)
+      return { file: { filename: file.filename, contentType: file.contentType, size: file.content.length, path } }
+    },
+
+    '/mail/send': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const mail = await runtime.prepareMail(account.id, composeOf(body))
+      const sent = await runtime.sendMail(account.id, mail)
+      return { sent, mail: { to: mail.to, cc: mail.cc, bcc: mail.bcc, subject: mail.subject } }
+    },
+
+    '/mail/reply': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const uid = Number(body.uid)
+      const mode = String(body.mode ?? 'reply') as 'reply' | 'reply-all' | 'forward'
+      const original = await runtime.mailRead(account.id, String(body.folder ?? 'INBOX'), uid, 4000)
+      // A field you typed in wins over the derived one: a reply answers the
+      // sender, reply-all keeps the others on Cc, forward goes wherever you
+      // say — but an address you added or removed is what leaves.
+      const typed = parseAddressList(String(body.to ?? ''))
+      const typedCc = body.cc === undefined ? undefined : parseAddressList(String(body.cc))
+      const derived = replyTargets(original, account.address)
+      const targets = {
+        to: typed.length > 0 ? typed : (mode === 'forward' ? [] as string[] : derived.to),
+        cc: typedCc ?? (mode === 'reply-all' ? derived.cc : [] as string[]),
+      }
+      if (targets.to.length === 0) throw new ApiError(langOf(body) === 'zh' ? '这封邮件没有可回复的地址' : 'this message has no address to answer')
+      // Blind copies are never derived from the original (nobody can see them
+      // there), so the only source is what you typed — and dropping it would
+      // quietly send the message to fewer people than you named.
+      const typedBcc = parseAddressList(String(body.bcc ?? ''))
+      const mail = await runtime.prepareMail(account.id, {
+        to: targets.to.join(', '),
+        cc: targets.cc.join(', '),
+        bcc: typedBcc.join(', '),
+        subject: mode === 'forward' ? forwardSubject(original.subject) : replySubject(original.subject),
+        text: String(body.text ?? ''),
+        ...body.attachments === undefined ? {} : { attachments: composeOf({ to: '', attachments: body.attachments }).attachments },
+        inReplyTo: original.messageId,
+        references: original.messageId === null ? [] : [original.messageId],
+      })
+      const sent = await runtime.sendMail(account.id, mail)
+      return { sent, mail: { to: mail.to, cc: mail.cc, bcc: mail.bcc, subject: mail.subject } }
+    },
+
+    // ── drafts ───────────────────────────────────────────
+
+    '/mail/draft/list': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      return { drafts: runtime.drafts(account.id) }
+    },
+
+    '/mail/draft/save': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const draft = runtime.saveDraft(account.id, composeOf(body))
+      return { draft }
+    },
+
+    '/mail/draft/edit': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const id = String(body.id ?? '')
+      const revision = Number(body.revision)
+      if (id === '' || !Number.isInteger(revision)) {
+        throw new ApiError(langOf(body) === 'zh' ? '要说清是哪一封草稿、第几版' : 'say which draft and which revision')
+      }
+      const draft = runtime.editDraft(account.id, id, revision, composeOf(body))
+      return { draft }
+    },
+
+    '/mail/draft/delete': async (body) => {
+      const id = String(body.id ?? '')
+      if (id === '') throw new ApiError(langOf(body) === 'zh' ? '要说清是哪一封草稿' : 'say which draft')
+      runtime.deleteDraft(id)
+      return { deleted: id }
+    },
+
+    '/mail/draft/send': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const id = String(body.id ?? '')
+      const revision = Number(body.revision)
+      if (id === '' || !Number.isInteger(revision)) {
+        throw new ApiError(langOf(body) === 'zh' ? '要说清是哪一封草稿、第几版' : 'say which draft and which revision')
+      }
+      return { sent: await runtime.sendDraft(account.id, id, revision) }
+    },
+
+    // A scheduled draft is an ordinary draft with a time on it, so the panel
+    // and the model use the same routes they already use for drafts.
+    '/mail/draft/schedule': async (body) => {
+      const account = mailAccount(body, langOf(body))
+      const id = String(body.id ?? '')
+      const revision = Number(body.revision)
+      if (id === '' || !Number.isInteger(revision)) {
+        throw new ApiError(langOf(body) === 'zh' ? '要说清是哪一封草稿、第几版' : 'say which draft and which revision')
+      }
+      return { draft: runtime.scheduleDraft(account.id, id, revision, body.sendAt) }
+    },
+
+    '/mail/draft/cancel': async (body) => {
+      const id = String(body.id ?? '')
+      const revision = Number(body.revision)
+      if (id === '' || !Number.isInteger(revision)) {
+        throw new ApiError(langOf(body) === 'zh' ? '要说清是哪一封草稿、第几版' : 'say which draft and which revision')
+      }
+      return { draft: runtime.cancelSchedule(id, revision) }
+    },
+
+    '/mail/due': async () => ({ result: await runtime.sendDueMail() }),
 
     '/mail/sync': async (body) => {
       const lang = langOf(body)

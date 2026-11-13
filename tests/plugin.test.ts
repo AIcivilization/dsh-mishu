@@ -63,7 +63,11 @@ test('the shell mounts with schema defaults, gates mishu_add behind approval, an
     assert.equal(config.leadDays.document, 90)
     apply(dsh.ctx, config, offline(config))
     await new Promise(resolve => setTimeout(resolve, 20))
-    assert.deepEqual(dsh.tools.map(t => t.name), ['mishu_add', 'mishu_list', 'mishu_detail', 'mishu_update', 'mishu_stop'])
+    assert.deepEqual(dsh.tools.map(t => t.name), [
+      'mishu_mail_list', 'mishu_mail_read', 'mishu_mail_search', 'mishu_mail_mark', 'mishu_mail_folders',
+      'mishu_mail_attachment', 'mishu_mail_send', 'mishu_mail_reply', 'mishu_mail_draft',
+      'mishu_add', 'mishu_list', 'mishu_detail', 'mishu_update', 'mishu_stop',
+    ])
 
     const due = tomorrow()
     const args = { title: '交物业费', due, category: 'bill' }

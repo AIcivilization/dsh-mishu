@@ -393,23 +393,28 @@ function MailDialog({ draft, view, lang, locale, openChat, onDone }: {
   const typed = password.replace(/\s+/g, '')
   const lengthOff = preset.passwordLength !== null && typed !== '' && typed.length !== preset.passwordLength
 
-  const save = async (unread?: number) => {
+  const save = async (note?: string) => {
     const r = await settingsApi.saveMail(locale(), account, password)
     setBusy(false)
-    if (r.ok) onDone(r.view, unread === undefined ? undefined : t.mSavedUnread(unread))
+    if (r.ok) onDone(r.view, note)
     else setMessage({ ok: false, text: r.message })
   }
+  // Reading and sending fail apart: an account whose IMAP answers is worth
+  // keeping even when its SMTP does not, so a refused send is said out loud
+  // and the account is still saved.
   const testAndSave = async () => {
     setBusy(true)
     setMessage({ ok: true, text: t.sTesting })
     const r = await settingsApi.testMail(locale(), account, password)
-    if (r.ok) {
-      await save(r.unread)
-    } else {
+    if (!r.ok) {
       setBusy(false)
       setFailedTest(true)
       setMessage({ ok: false, text: r.message })
+      return
     }
+    const unread = t.mSavedUnread(r.unread)
+    if (r.smtp === 'failed') await save(`${unread} ${t.mSmtpFailed(r.smtpError ?? '')}`)
+    else await save(r.smtp === 'none' ? `${unread} ${t.mSmtpNone}` : `${unread} ${t.mSmtpOk}`)
   }
 
   return (
@@ -452,6 +457,14 @@ function MailDialog({ draft, view, lang, locale, openChat, onDone }: {
           <label className="mishu-field">{t.sPort}<input type="number" value={account.port ?? 993} onChange={e => set({ port: Number(e.target.value) })} /></label>
         </div>
       ) : null}
+      {custom ? (
+        <div className="mishu-row">
+          <label className="mishu-field">{t.sSmtp}<input value={account.smtpHost ?? ''} placeholder="smtp.example.com" onChange={e => set({ smtpHost: e.target.value })} /></label>
+          <label className="mishu-field">{t.sPort}<input type="number" value={account.smtpPort ?? 465} onChange={e => set({ smtpPort: Number(e.target.value) })} /></label>
+        </div>
+      ) : (
+        <p className="mishu-hint">{t.sSmtp}：{preset.smtp.host === '' ? t.mSmtpNone : `${preset.smtp.host}:${preset.smtp.port}`}</p>
+      )}
       <details className="mishu-more">
         <summary>{t.mMore}</summary>
         <div className="mishu-row">

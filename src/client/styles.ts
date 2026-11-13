@@ -134,5 +134,55 @@ export const STYLES = `
 .mishu-ai.compact{font-size:11px;padding:1px 8px;margin-left:4px}
 .mishu-ai:focus-visible{outline:2px solid ${ACCENT};outline-offset:2px}
 .mishu-ai-note{font-size:11px;color:${MUTED}}
-@media (max-width:820px){.mishu-columns{grid-template-columns:1fr;gap:12px}.mishu-divider{display:none}.mishu-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.mishu-grid5{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mishu-mail{display:flex;flex-direction:column;gap:10px;max-width:1180px}
+.mishu-mail-note{margin:0}
+.mishu-mail-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mishu-mail-bar select{font:inherit;font-size:13px;color:${TEXT};background:${LAYER2};border:1px solid ${LINE_STRONG};border-radius:6px;padding:3px 6px}
+.mishu-mail-who{font-size:13px;color:${MUTED}}
+.mishu-mail-search{flex:1 1 200px;min-width:140px;font:inherit;font-size:13px;color:${TEXT};background:${LAYER2};border:1px solid ${LINE_STRONG};border-radius:6px;padding:4px 8px}
+.mishu-mail-body{display:grid;grid-template-columns:150px minmax(0,1fr) minmax(0,1.4fr);gap:10px;align-items:start}
+.mishu-mail-folders{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mishu-mail-label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:${FAINT};margin:6px 4px 2px}
+.mishu-mail-folder{display:flex;justify-content:space-between;gap:6px;flex:1;min-width:0;font:inherit;font-size:13px;text-align:left;color:${MUTED};background:transparent;border:0;border-radius:6px;padding:4px 8px;cursor:pointer;overflow:hidden}
+.mishu-mail-folder span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mishu-mail-folder small{color:${FAINT}}
+.mishu-mail-folder:hover{background:${HOVER}}
+.mishu-mail-folder.active{background:${LAYER2};color:${TEXT};font-weight:600}
+.mishu-mail-folder-row{display:flex;align-items:center;gap:2px;border-radius:6px}
+.mishu-mail-folder-row.active{background:${LAYER2}}
+.mishu-mail-folder-tools{display:none;gap:2px;padding-right:4px}
+.mishu-mail-folder-row:hover .mishu-mail-folder-tools{display:flex}
+.mishu-mail-folder-tools button{font:inherit;font-size:11px;line-height:1;color:${FAINT};background:transparent;border:0;padding:3px 2px;cursor:pointer;border-radius:4px}
+.mishu-mail-folder-tools button:hover{color:${TEXT};background:${HOVER}}
+.mishu-mail-folder-form{display:flex;gap:4px;margin:2px 0}
+.mishu-mail-folder-form input{flex:1;min-width:0;font:inherit;font-size:12px;color:${TEXT};background:${LAYER1};border:1px solid ${LINE};border-radius:6px;padding:3px 6px}
+.mishu-mail-folder-new{font-size:12px;text-align:left;margin-top:2px}
+.mishu-mail-draft{border:1px dashed ${LINE_STRONG};border-radius:8px;padding:4px 6px;margin:2px 0}
+.mishu-mail-draft-title{display:block;width:100%;text-align:left;font:inherit;font-size:12px;color:${TEXT};background:transparent;border:0;padding:2px 0;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mishu-mail-draft-actions{display:flex;gap:4px;margin-top:2px}
+.mishu-mail-draft-when{font-size:11px;color:${ACCENT};padding:1px 0}
+.mishu-mail-draft-why{font-size:11px;color:${DANGER};padding:1px 0;overflow-wrap:anywhere}
+.mishu-mail-list{display:flex;flex-direction:column;gap:2px;background:${LAYER1};border-radius:12px;padding:6px;min-height:120px}
+.mishu-mail-line{display:flex;align-items:flex-start;gap:4px}
+.mishu-mail-pick{margin:8px 0 0 2px;flex:none;accent-color:${ACCENT}}
+.mishu-mail-selectbar{display:flex;align-items:center;gap:6px;padding:2px 6px 6px;font-size:12px;color:${MUTED};flex-wrap:wrap}
+.mishu-mail-picked{margin-right:2px}
+.mishu-mail-item{display:block;flex:1;min-width:0;text-align:left;font:inherit;color:${TEXT};background:transparent;border:0;border-radius:8px;padding:6px 8px;cursor:pointer}
+.mishu-mail-item:hover{background:${HOVER}}
+.mishu-mail-item.active{background:${LAYER2};outline:1px solid ${ACCENT}}
+.mishu-mail-item.unread .mishu-mail-subject{font-weight:600}
+.mishu-mail-item-top{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:${MUTED}}
+.mishu-mail-from{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mishu-mail-date{flex:0 0 auto;color:${FAINT}}
+.mishu-mail-subject{font-size:13px;margin-top:1px;word-break:break-word}
+.mishu-mail-tag{margin-left:6px;font-size:11px}
+.mishu-mail-more{align-self:center;margin:4px 0}
+.mishu-mail-read{background:${LAYER1};border-radius:12px;padding:12px 14px;min-height:120px;min-width:0}
+.mishu-mail-title{font-size:15px;font-weight:600;margin:0 0 6px;word-break:break-word}
+.mishu-mail-meta{display:flex;flex-direction:column;gap:2px;font-size:12px;color:${MUTED};margin-bottom:8px;word-break:break-word}
+.mishu-mail-move{font:inherit;font-size:12px;color:${TEXT};background:transparent;border:1px solid ${LINE_STRONG};border-radius:6px;padding:2px 6px}
+.mishu-mail-attachments{margin:10px 0 0}
+.mishu-mail-attachment{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;background:${LAYER2};border-radius:6px;padding:4px 8px;margin-bottom:4px;word-break:break-all}
+.mishu-mail-text{white-space:pre-wrap;word-break:break-word;font:inherit;font-size:13px;line-height:1.6;margin:10px 0 0;padding-top:10px;border-top:1px solid ${LINE};max-height:52vh;overflow:auto}
+@media (max-width:820px){.mishu-columns{grid-template-columns:1fr;gap:12px}.mishu-divider{display:none}.mishu-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.mishu-grid5{grid-template-columns:repeat(2,minmax(0,1fr))}.mishu-mail-body{grid-template-columns:1fr}.mishu-mail-folders{flex-direction:row;flex-wrap:wrap;align-items:center}}
 `

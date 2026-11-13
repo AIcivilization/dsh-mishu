@@ -1,8 +1,12 @@
 // Calls to the plugin's endpoints on DSH's own authenticated `/api` channel.
 
 import type { BoardData, MatterDetail } from '../core/board.ts'
+import type {
+  DraftView, MailBody, MailFolder, MailListPage, MailMarkResult, MailSearchResult, MailSummary,
+} from '../core/index.ts'
 
 export type { BoardCard, BoardData, CardAction, DoneGroup, MatterDetail } from '../core/board.ts'
+export type { DraftView, MailBody, MailFolder, MailListPage, MailMarkResult, MailSearchResult, MailSummary } from '../core/index.ts'
 
 export interface NewItem {
   title: string
@@ -60,6 +64,9 @@ export interface AccountView {
   host: string
   port: number
   secure: boolean
+  smtpHost?: string
+  smtpPort?: number
+  smtpSecure?: boolean
   user: string
   enabled: boolean
   sinceDays: number
@@ -76,6 +83,7 @@ export interface PresetView {
   host: string
   port: number
   secure: boolean
+  smtp: { host: string; port: number; secure: boolean }
   supported: boolean
   howTo: string
   domains: string[]
@@ -196,7 +204,8 @@ export const settingsApi = {
   deviceStatus: (lang: string) => post<{ login: DeviceView; view?: SettingsView }>('/github/device/status', { lang }),
   deviceCancel: (lang: string) => post<{ login: DeviceView }>('/github/device/cancel', { lang }),
   saveMail: (lang: string, account: AccountDraft, password: string) => post<{ id: number; view: SettingsView }>('/mail/save', { lang, account, password }),
-  testMail: (lang: string, account: AccountDraft, password: string) => post<{ unread: number }>('/mail/test', { lang, account, password }),
+  testMail: (lang: string, account: AccountDraft, password: string) =>
+    post<{ unread: number; smtp: 'ok' | 'failed' | 'none'; smtpError?: string }>('/mail/test', { lang, account, password }),
   deleteMail: (lang: string, id: number) => post<{ view: SettingsView }>('/mail/delete', { lang, id }),
   syncMail: (lang: string, id: number) => post<{ view: SettingsView }>('/mail/sync', { lang, id }),
   saveWatch: (lang: string, watch: WatchDraft) => post<{ id: number; view: SettingsView }>('/watch/save', { lang, watch }),
@@ -207,4 +216,57 @@ export const settingsApi = {
   disarmBrief: (lang: string) => post<{ view: SettingsView; schedule: ScheduleView }>('/schedule/brief/disarm', { lang }),
   runTask: (lang: string, id: string) => post<{ schedule: ScheduleView }>('/schedule/run', { lang, id }),
   deleteTask: (lang: string, id: string) => post<{ schedule: ScheduleView }>('/schedule/delete', { lang, id }),
+}
+
+/** Mail: listing, reading, writing, drafts. All of it goes through the same
+ *  authenticated channel; nothing here touches the network directly. */
+export interface MailDraft {
+  to: string
+  cc: string
+  bcc: string
+  subject: string
+  text: string
+  attachments: string[]
+  /** Set when this draft answers or forwards a message, so sending keeps the thread. */
+  reply?: { folder: string; uid: number; mode: 'reply' | 'reply-all' | 'forward' } | undefined
+}
+
+/** Delete means "into Trash"; purge means gone for good and only counts inside Trash. */
+export type MarkAction = 'read' | 'unread' | 'star' | 'unstar' | 'move' | 'delete' | 'purge'
+
+export const mailApi = {
+  list: (lang: string, account: number | undefined, options: { folder?: string; limit?: number; offset?: number; unreadOnly?: boolean }) =>
+    post<{ page: MailListPage }>('/mail/list', { lang, account, ...options }),
+  read: (lang: string, account: number | undefined, folder: string, uid: number, maxChars?: number) =>
+    post<{ message: MailBody }>('/mail/read', { lang, account, folder, uid, ...maxChars === undefined ? {} : { maxChars } }),
+  search: (lang: string, account: number | undefined, query: string, options: { folder?: string; fields?: string[]; limit?: number; bodyLimit?: number }) =>
+    post<{ found: MailSearchResult }>('/mail/search', { lang, account, query, ...options }),
+  mark: (lang: string, account: number | undefined, folder: string, uid: number, action: MarkAction, destination?: string) =>
+    post<{ result: MailMarkResult }>('/mail/mark', { lang, account, folder, uid, action, ...destination === undefined ? {} : { destination } }),
+  markMany: (lang: string, account: number | undefined, folder: string, uids: number[], action: MarkAction, destination?: string) =>
+    post<{ results: MailMarkResult[] }>('/mail/mark/many', { lang, account, folder, uids, action, ...destination === undefined ? {} : { destination } }),
+  folders: (lang: string, account: number | undefined) => post<{ folders: MailFolder[] }>('/mail/folders', { lang, account }),
+  createFolder: (lang: string, account: number | undefined, path: string) =>
+    post<{ folders: MailFolder[] }>('/mail/folder/create', { lang, account, path }),
+  renameFolder: (lang: string, account: number | undefined, from: string, to: string) =>
+    post<{ folders: MailFolder[] }>('/mail/folder/rename', { lang, account, from, to }),
+  deleteFolder: (lang: string, account: number | undefined, path: string) =>
+    post<{ folders: MailFolder[] }>('/mail/folder/delete', { lang, account, path }),
+  attachment: (lang: string, account: number | undefined, folder: string, uid: number, index: number) =>
+    post<{ file: { filename: string; contentType: string; size: number; path: string } }>('/mail/attachment', { lang, account, folder, uid, index }),
+  send: (lang: string, account: number | undefined, draft: MailDraft) =>
+    post<{ sent: { messageId: string; accepted: string[]; rejected: string[]; response: string } }>('/mail/send', { lang, account, ...draft }),
+  reply: (lang: string, account: number | undefined, folder: string, uid: number, mode: 'reply' | 'reply-all' | 'forward', text: string, options: { to?: string; cc?: string; bcc?: string; attachments?: string[] } = {}) =>
+    post<{ sent: { messageId: string; accepted: string[]; rejected: string[]; response: string } }>('/mail/reply', { lang, account, folder, uid, mode, text, ...options }),
+  drafts: (lang: string, account: number | undefined) => post<{ drafts: DraftView[] }>('/mail/draft/list', { lang, account }),
+  saveDraft: (lang: string, account: number | undefined, draft: MailDraft) => post<{ draft: DraftView }>('/mail/draft/save', { lang, account, ...draft }),
+  editDraft: (lang: string, account: number | undefined, draftId: string, revision: number, draft: MailDraft) =>
+    post<{ draft: DraftView }>('/mail/draft/edit', { lang, account, id: draftId, revision, ...draft }),
+  deleteDraft: (lang: string, draftId: string) => post<{ deleted: string }>('/mail/draft/delete', { lang, id: draftId }),
+  sendDraft: (lang: string, account: number | undefined, draftId: string, revision: number) =>
+    post<{ sent: { messageId: string } }>('/mail/draft/send', { lang, account, id: draftId, revision }),
+  scheduleDraft: (lang: string, account: number | undefined, draftId: string, revision: number, sendAt: string) =>
+    post<{ draft: DraftView }>('/mail/draft/schedule', { lang, account, id: draftId, revision, sendAt }),
+  cancelSchedule: (lang: string, draftId: string, revision: number) =>
+    post<{ draft: DraftView }>('/mail/draft/cancel', { lang, id: draftId, revision }),
 }

@@ -12,7 +12,7 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { Category, Repeat } from './recur.ts'
 
-const SCHEMA_VERSION = 3
+const SCHEMA_VERSION = 5
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS matters (
@@ -82,7 +82,28 @@ CREATE TABLE IF NOT EXISTS rule_stats (
   fired     INTEGER NOT NULL DEFAULT 0,
   corrected INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS drafts (
+  id          TEXT    PRIMARY KEY,
+  account     INTEGER NOT NULL,
+  revision    INTEGER NOT NULL,
+  to_addr     TEXT    NOT NULL DEFAULT '',
+  cc_addr     TEXT    NOT NULL DEFAULT '',
+  bcc_addr    TEXT    NOT NULL DEFAULT '',
+  subject     TEXT    NOT NULL DEFAULT '',
+  text        TEXT    NOT NULL DEFAULT '',
+  html        TEXT,
+  attachments TEXT    NOT NULL DEFAULT '[]',
+  reply       TEXT,
+  state       TEXT    NOT NULL DEFAULT 'draft',
+  send_at     INTEGER,
+  error       TEXT,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  sent_at     INTEGER
+);
 CREATE INDEX IF NOT EXISTS matters_by_status ON matters(status, closed_at);
+CREATE INDEX IF NOT EXISTS drafts_by_account ON drafts(account, updated_at);
+CREATE INDEX IF NOT EXISTS drafts_by_time ON drafts(state, send_at);
 CREATE INDEX IF NOT EXISTS messages_by_matter ON messages(matter_key);
 CREATE INDEX IF NOT EXISTS messages_unread ON messages(source, unread);
 `
@@ -185,6 +206,64 @@ export interface RuleStats {
   corrected: number
 }
 
+/** A message being written: kept until it is sent or thrown away. */
+export interface Draft {
+  id: string
+  account: number
+  /** Bumped on every save; a save that names an older one is refused. */
+  revision: number
+  to: string
+  cc: string
+  bcc: string
+  subject: string
+  text: string
+  html: string | null
+  /** Attachment paths, as typed. */
+  attachments: string[]
+  /** The message this replies to or forwards, when it is one. */
+  reply: { folder: string; uid: number; mode: 'reply' | 'reply-all' | 'forward' } | null
+  /** `scheduled` means: a draft with `sendAt` set, waiting for the clock. */
+  state: DraftState
+  /** When a scheduled draft goes, in epoch milliseconds; null otherwise. */
+  sendAt: number | null
+  /** Why a scheduled send failed, in the user's words; cleared on the next try. */
+  error: string | null
+  createdAt: number
+  updatedAt: number
+  sentAt: number | null
+}
+
+/** Where a draft is in its life. */
+export type DraftState = 'draft' | 'scheduled' | 'sending' | 'sent'
+
+export interface NewDraft {
+  id: string
+  account: number
+  to?: string
+  cc?: string
+  bcc?: string
+  subject?: string
+  text?: string
+  html?: string | null
+  attachments?: string[]
+  reply?: Draft['reply']
+}
+
+/** What a draft update may change; `revision` must match the stored one. */
+export interface DraftPatch {
+  to?: string
+  cc?: string
+  bcc?: string
+  subject?: string
+  text?: string
+  html?: string | null
+  attachments?: string[]
+  reply?: Draft['reply']
+  state?: Draft['state']
+  sendAt?: number | null
+  error?: string | null
+}
+
 type Row = Record<string, unknown>
 
 const str = (v: unknown) => (v === null || v === undefined ? null : String(v))
@@ -251,6 +330,43 @@ function toSeries(row: Row): Series {
   }
 }
 
+function toDraft(row: Row): Draft {
+  let attachments: string[] = []
+  try {
+    const parsed = JSON.parse(String(row.attachments ?? '[]')) as unknown
+    if (Array.isArray(parsed)) attachments = parsed.filter((v): v is string => typeof v === 'string')
+  } catch {
+    attachments = []
+  }
+  let reply: Draft['reply'] = null
+  if (row.reply !== null && row.reply !== undefined) {
+    try {
+      reply = JSON.parse(String(row.reply)) as Draft['reply']
+    } catch {
+      reply = null
+    }
+  }
+  return {
+    id: String(row.id),
+    account: Number(row.account),
+    revision: Number(row.revision),
+    to: String(row.to_addr ?? ''),
+    cc: String(row.cc_addr ?? ''),
+    bcc: String(row.bcc_addr ?? ''),
+    subject: String(row.subject ?? ''),
+    text: String(row.text ?? ''),
+    html: str(row.html),
+    attachments,
+    reply,
+    state: (row.state ?? 'draft') as Draft['state'],
+    sendAt: num(row.send_at),
+    error: str(row.error),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+    sentAt: num(row.sent_at),
+  }
+}
+
 /** Columns a matter update may touch. */
 export type MatterPatch = Partial<Pick<Matter,
   'title' | 'note' | 'url' | 'status' | 'reason' | 'closedBy' | 'closedAt' | 'activityAt' | 'overrideAt' | 'kind' | 'snoozeUntil' | 'explain'>>
@@ -291,10 +407,17 @@ export class MishuStore {
       throw new Error(`dsh-mishu: ${path} has schema ${version}, this build only knows ${SCHEMA_VERSION}`)
     }
     db.exec(SCHEMA)
-    // v1 → v2: matters gained snooze_until; v2 → v3: explain.
+    // v1 → v2: matters gained snooze_until; v2 → v3: explain; v3 → v4: drafts
+    // (a new table, so `CREATE TABLE IF NOT EXISTS` above was the whole migration);
+    // v4 → v5: drafts gained send_at (scheduled mail) and error (why a scheduled
+    // send failed, so the panel can say it instead of retrying silently).
     const columns = (db.prepare('PRAGMA table_info(matters)').all() as Row[]).map(c => String(c.name))
     if (!columns.includes('snooze_until')) db.exec('ALTER TABLE matters ADD COLUMN snooze_until TEXT')
     if (!columns.includes('explain')) db.exec('ALTER TABLE matters ADD COLUMN explain TEXT')
+    const draftColumns = (db.prepare('PRAGMA table_info(drafts)').all() as Row[]).map(c => String(c.name))
+    if (!draftColumns.includes('send_at')) db.exec('ALTER TABLE drafts ADD COLUMN send_at INTEGER')
+    if (!draftColumns.includes('error')) db.exec('ALTER TABLE drafts ADD COLUMN error TEXT')
+    db.exec('CREATE INDEX IF NOT EXISTS drafts_by_time ON drafts(state, send_at)')
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     return new MishuStore(path, db)
   }
@@ -413,6 +536,72 @@ export class MishuStore {
   wouldMarkReadCount(source: string): number {
     return Number((this.db.prepare('SELECT COUNT(*) AS n FROM messages WHERE source = ? AND unread = 1 AND would_mark_read = 1')
       .get(source) as Row).n)
+  }
+
+  // ── drafts ──────────────────────────────────────────────
+
+  draftById(id: string): Draft | undefined {
+    const row = this.db.prepare('SELECT * FROM drafts WHERE id = ?').get(id) as Row | undefined
+    return row === undefined ? undefined : toDraft(row)
+  }
+
+  /**
+   * Drafts of one account, newest first. Sent rows are left out: they are the
+   * record of what left, not something still waiting in the drawer, and a
+   * sent draft cannot be sent again. Pass `state` to look at one kind alone.
+   */
+  drafts(account: number, state?: Draft['state']): Draft[] {
+    const rows = (state === undefined
+      ? this.db.prepare("SELECT * FROM drafts WHERE account = ? AND state <> 'sent' ORDER BY updated_at DESC").all(account)
+      : this.db.prepare('SELECT * FROM drafts WHERE account = ? AND state = ? ORDER BY updated_at DESC').all(account, state)) as Row[]
+    return rows.map(toDraft)
+  }
+
+  insertDraft(d: NewDraft, now: number): Draft {
+    this.db.prepare(`
+      INSERT INTO drafts (id, account, revision, to_addr, cc_addr, bcc_addr, subject, text, html, attachments, reply, state, created_at, updated_at)
+      VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+    ).run(
+      d.id, d.account, d.to ?? '', d.cc ?? '', d.bcc ?? '', d.subject ?? '', d.text ?? '', d.html ?? null,
+      JSON.stringify(d.attachments ?? []), d.reply === undefined || d.reply === null ? null : JSON.stringify(d.reply), now, now,
+    )
+    return this.draftById(d.id)!
+  }
+
+  /**
+   * Change a draft, if it is still at `revision`. Returns undefined when the
+   * draft moved on (another window saved it) or is gone, so a stale editor
+   * cannot overwrite a newer draft.
+   */
+  updateDraft(id: string, revision: number, patch: DraftPatch, now: number): Draft | undefined {
+    const entries = Object.entries(patch).filter(([, v]) => v !== undefined) as Array<[keyof DraftPatch, unknown]>
+    const columns: Record<keyof DraftPatch, string> = {
+      to: 'to_addr', cc: 'cc_addr', bcc: 'bcc_addr', subject: 'subject', text: 'text',
+      html: 'html', attachments: 'attachments', reply: 'reply', state: 'state',
+      sendAt: 'send_at', error: 'error',
+    }
+    const sets = entries.map(([k]) => `${columns[k]} = ?`)
+    const values = entries.map(([k, v]) => (k === 'attachments' ? JSON.stringify(v) : k === 'reply' ? (v === null ? null : JSON.stringify(v)) : v) as string | number | null)
+    const result = this.db.prepare(`UPDATE drafts SET ${sets.length === 0 ? 'revision = revision' : `${sets.join(', ')},`} revision = revision + 1, updated_at = ? WHERE id = ? AND revision = ?`)
+      .run(...values, now, id, revision)
+    return Number(result.changes) === 0 ? undefined : this.draftById(id)
+  }
+
+  deleteDraft(id: string): void {
+    this.db.prepare('DELETE FROM drafts WHERE id = ?').run(id)
+  }
+
+  /** Scheduled drafts across every account whose time has come, oldest first. */
+  dueDrafts(now: number): Draft[] {
+    const rows = this.db.prepare(
+      "SELECT * FROM drafts WHERE state = 'scheduled' AND send_at IS NOT NULL AND send_at <= ? ORDER BY send_at ASC",
+    ).all(now) as Row[]
+    return rows.map(toDraft)
+  }
+
+  /** Mark a draft sent and stamp it; the row is kept so a late click does not re-send. */
+  markDraftSent(id: string, now: number): void {
+    this.db.prepare("UPDATE drafts SET state = 'sent', sent_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?").run(now, now, id)
   }
 
   // ── series ──────────────────────────────────────────────

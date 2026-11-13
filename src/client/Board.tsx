@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { mishuApi, restartApi, type BoardCard, type BoardData, type CardAction, type MatterDetail, type NewItem } from './api.ts'
 import { AskAI, type OpenChat } from './AskAI.tsx'
+import { MishuMail } from './Mail.tsx'
 import { MishuSettings } from './Settings.tsx'
 import { TEXT, uiLang, type UiLang } from './text.ts'
 
@@ -69,7 +70,7 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
   const [syncing, setSyncing] = useState(false)
   const [dropOn, setDropOn] = useState<Column | undefined>()
   const [widths, setWidths] = useState<[number, number, number]>(loadWidths)
-  const [tab, setTab] = useState<'board' | 'settings'>('board')
+  const [tab, setTab] = useState<'board' | 'mail' | 'settings'>('board')
   const [openCard, setOpenCard] = useState<string | undefined>()
   const [source, setSourceState] = useState<Source>(loadSource)
   const setSource = (next: Source) => {
@@ -254,6 +255,7 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
           <h1>{t.title}</h1>
           <div className="mishu-tabs" role="tablist">
             <button type="button" role="tab" aria-selected={tab === 'board'} className={tab === 'board' ? 'active' : ''} onClick={() => setTab('board')}>{t.tabBoard}</button>
+            <button type="button" role="tab" aria-selected={tab === 'mail'} className={tab === 'mail' ? 'active' : ''} onClick={() => setTab('mail')}>{t.tabMail}</button>
             <button type="button" role="tab" aria-selected={tab === 'settings'} className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>{t.tabSettings}</button>
           </div>
           <RestartButton lang={lang} locale={locale} />
@@ -279,7 +281,8 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
         </div>
       </div>
       {tab === 'settings' ? <MishuSettings lang={lang} locale={locale} openChat={openChat} /> : null}
-      {tab === 'settings' ? null : <>
+      {tab === 'mail' ? <MishuMail lang={lang} locale={locale} /> : null}
+      {tab === 'settings' || tab === 'mail' ? null : <>
       {error === undefined ? null : <div className="mishu-error">{t.failed}{error}</div>}
       <p className="mishu-summary">{board.summary} <AskAI topic={{ kind: 'summary' }} lang={lang} locale={locale} openChat={openChat} compact /></p>
 

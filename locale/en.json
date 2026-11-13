@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Secretary",
-    "description": "Watches your unread GitHub notifications, works out which ones are already over and closes them, and remembers the dated things you tell it (bills, renewals, document expiries, birthdays) until they are due. Reads your inbox read-only; secrets stay in the system keychain."
+    "description": "Watches your unread GitHub notifications, works out which ones are already over and closes them, and remembers the dated things you tell it (bills, renewals, document expiries, birthdays) until they are due. Mail goes both ways: the Mail tab lists folders, reads bodies, searches, marks, moves, saves attachments, writes, replies and forwards, with drafts kept locally that can also be scheduled to go on their own — and every outgoing message is shown to you as a card before it leaves. Secrets stay in the system keychain."
   }
 }

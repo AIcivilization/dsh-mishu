@@ -25,8 +25,24 @@ export { DEFAULT_DEMOTION, isActive, isDemoted, setStatusByUser, snoozeByUser, t
 export { CATEGORIES, CATEGORY_LABELS, DEFAULT_LEAD_DAYS, REPEATS, type Category, type Repeat } from './recur.ts'
 export { MishuStore, type Matter, type MatterStatus, type Series } from './store.ts'
 export { addDays, dayOf, formatMoment } from './time.ts'
-export { MAIL_PRESETS, normalizePassword, presetById, presetForAddress, providerMismatch, secretAccount, type MailAccount, type MailFetcher, type MailMessage, type MailPreset } from './mail/account.ts'
-export { ImapFetcher } from './mail/imap.ts'
+export {
+  MAIL_PRESETS, normalizePassword, presetById, presetForAddress, providerMismatch, resolveAccount, secretAccount, senderOf, smtpOf,
+  type MailAccount, type MailAttachment, type MailAttachmentInfo, type MailBody, type MailFetcher, type MailFolder,
+  MAX_ATTACHMENT_DOWNLOAD,
+  MAX_BATCH, type MailListOptions, type MailListPage, type MailMarkAction, type MailMarkResult, type MailMessage, type MailPreset,
+  type MailSearchField, type MailSearchOptions, type MailSearchResult, type MailStep, type MailSummary, type MailSmtp,
+} from './mail/account.ts'
+export { collectParts, ImapFetcher, type MailPartInfo } from './mail/imap.ts'
+export { decodeEntities, sanitizeFilename, shortSubject, stripHtml, tidy, truncateText, uniqueFilename } from './mail/parse.ts'
+export {
+  bareAddress, canonicalAddress, describeRecipients, forwardBody, forwardSubject, htmlToText, parseAddressList, prepareMail,
+  replySubject, replyTargets, resolveAttachments, sanitizeOutgoingHtml, sendMail, textToHtml, verifySmtp,
+  type MailCompose, type OutgoingAttachment, type PreparedMail, type SendResult,
+} from './mail/send.ts'
+export { claimDraft, DRAFT_FIELDS, draftToCompose, draftView, editDraft, MAX_DRAFTS, newDraft, saveDraft, type DraftView } from './mail/draft.ts'
+export { assertCustomFolder, folderPath, isSystemFolder } from './mail/folder.ts'
+export { cancelSchedule, dueDrafts, isScheduled, scheduledTime, scheduleDraft } from './mail/schedule.ts'
+export type { Draft, DraftPatch, DraftState, NewDraft } from './store.ts'
 export { judgeMail } from './mail/rules.ts'
 export { describeMailError, MAIL_SOURCE, mailReportKey, syncMail, type MailSyncReport } from './mail/sync.ts'
 export { findProgram } from './exec.ts'
@@ -60,5 +76,5 @@ export function expandHome(path: string): string {
 
 export function mishuPaths(home: string) {
   const root = expandHome(home)
-  return { root, db: join(root, 'mishu.db'), secrets: join(root, 'secrets.json') }
+  return { root, db: join(root, 'mishu.db'), secrets: join(root, 'secrets.json'), attachments: join(root, 'attachments') }
 }

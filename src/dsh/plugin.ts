@@ -17,6 +17,7 @@ import type { MishuConfig } from './config.ts'
 import { API_BASE, apiHandlers, handle } from './api.ts'
 import { Runtime } from './runtime.ts'
 import type { ScheduleLike } from './schedule.ts'
+import { MAIL_APPROVAL_TOOLS, mailApproval, registerMailTools, type MailToolDeps } from './mail-tools.ts'
 import { ADD_TOOL, addApproval, describeChange, registerTools } from './tools.ts'
 
 interface CommandsLike {
@@ -40,6 +41,8 @@ interface ToolsCtx {
 }
 
 const TICK_MS = 10 * 60_000
+/** Scheduled mail looks at the clock this often. */
+const SEND_TICK_MS = 30_000
 
 const HELP = bi([
   '/mishu — 简报：要处理的、快到了的、替你关掉了什么',
@@ -97,6 +100,13 @@ export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(c
     // Reminders look at the clock every minute: the brief's time, the end of quiet hours.
     const notifyTimer = setInterval(() => { void runtime.notify() }, 60_000)
     notifyTimer.unref()
+    // Scheduled mail is checked about every half minute: late by a minute is
+    // fine, late by ten is not, and a message due while DSH restarts goes out
+    // on the first tick after it is back.
+    const sendTimer = setInterval(() => {
+      void runtime.sendDueMail().catch(error => ctx.logger.warn(`dsh-mishu: scheduled mail failed (${(error as Error).message})`))
+    }, SEND_TICK_MS)
+    sendTimer.unref()
     const settings = runtime.settings()
     ctx.logger.info(`dsh-mishu: notebook ${paths.db}; language ${runtime.lang()}; github ${settings.githubEnabled ? `every ${config.github.intervalMinutes} min, mark read ${settings.markRead}` : 'off'}; ${runtime.accounts().length} mail account(s); secrets in ${runtime.secrets.kind}`)
     return async () => {
@@ -104,14 +114,41 @@ export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(c
       clearTimeout(firstSync)
       clearInterval(syncTimer)
       clearInterval(notifyTimer)
+      clearInterval(sendTimer)
       await Promise.race([runtime.idle(), new Promise(resolve => setTimeout(resolve, 5000).unref())])
       opened.close()
       runtime.store = undefined
     }
   })
 
+  const mailDeps: MailToolDeps = {
+    lang: () => runtime.lang(),
+    accounts: () => runtime.accounts(),
+    list: (id, options) => runtime.mailList(id, options),
+    read: (id, folder, uid, maxChars) => runtime.mailRead(id, folder, uid, maxChars),
+    search: (id, options) => runtime.mailSearch(id, options),
+    mark: (id, folder, uid, action, destination) => runtime.mailMark(id, folder, uid, action, destination),
+    folders: id => runtime.mailFolders(id),
+    createFolder: (id, path) => runtime.mailCreateFolder(id, path),
+    renameFolder: (id, from, to) => runtime.mailRenameFolder(id, from, to),
+    deleteFolder: (id, path) => runtime.mailDeleteFolder(id, path),
+    attachment: (id, folder, uid, index) => runtime.mailAttachment(id, folder, uid, index),
+    prepare: (id, compose) => runtime.prepareMail(id, compose),
+    send: (id, mail) => runtime.sendMail(id, mail),
+    drafts: id => runtime.drafts(id),
+    saveDraft: (id, input) => runtime.saveDraft(id, input),
+    editDraft: (id, draftId, revision, patch) => runtime.editDraft(id, draftId, revision, patch as never),
+    sendDraft: (id, draftId, revision) => runtime.sendDraft(id, draftId, revision),
+    deleteDraft: draftId => { runtime.deleteDraft(draftId) },
+    markMany: (id, folder, uids, action, destination) => runtime.mailMarkMany(id, folder, uids, action, destination),
+    scheduleDraft: (id, draftId, revision, sendAt) => runtime.scheduleDraft(id, draftId, revision, sendAt),
+    cancelSchedule: (draftId, revision) => runtime.cancelSchedule(draftId, revision),
+    inboxDir: paths.attachments,
+  }
+
   ctx.inject(['tools'], (toolsCtx) => {
     const scoped = toolsCtx as unknown as ToolsCtx
+    void registerMailTools(scoped.tools, mailDeps).catch(error => ctx.logger.warn(`dsh-mishu: mail tools not registered (${(error as Error).message})`))
     void registerTools(scoped.tools, {
       store: () => runtime.store,
       leadDays: () => runtime.settings().leadDays,
@@ -121,11 +158,16 @@ export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(c
     }).catch(error => ctx.logger.warn(`dsh-mishu: tools not registered (${(error as Error).message})`))
     scoped.on('tools/pre-execute', async (exec, next) => {
       const decision = await next()
-      if (decision.kind !== 'allow' || exec.name !== ADD_TOOL) return decision
-      const card = addApproval(exec.arguments, runtime.settings().leadDays, Date.now())
-      // Invalid arguments run and fail in execute with the reason; nothing is saved.
+      if (decision.kind !== 'allow') return decision
+      const lang = runtime.lang()
+      const card = exec.name === ADD_TOOL
+        ? addApproval(exec.arguments, runtime.settings().leadDays, Date.now())
+        : (MAIL_APPROVAL_TOOLS as readonly string[]).includes(exec.name)
+          ? await mailApproval(exec.name, (exec.arguments ?? {}) as Record<string, unknown>, mailDeps)
+          : undefined
+      // Invalid arguments run and fail in execute with the reason; nothing is saved or sent.
       if (card === undefined) return decision
-      return { kind: 'ask', reason: card[runtime.lang()], displayReason: { en: card.en, zh: card.zh, 'zh-CN': card.zh } }
+      return { kind: 'ask', reason: card[lang], displayReason: { en: card.en, zh: card.zh, 'zh-CN': card.zh } }
     })
   })
 
