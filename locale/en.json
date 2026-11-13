@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Secretary",
+    "description": "Watches your unread GitHub notifications, works out which ones are already over and closes them, and remembers the dated things you tell it (bills, renewals, document expiries, birthdays) until they are due. Reads your inbox read-only; secrets stay in the system keychain."
+  }
+}
