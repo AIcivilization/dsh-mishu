@@ -92,7 +92,9 @@
 
 **+AI**：看不明白就点彩色的"+AI"。它会开一个新对话，把这件事的说明、链接和相关通知放进输入框（不会自动发送），你看过、补上自己的问题再按发送。看板上的每张卡片、顶部总结、来源报错、设置页里各邮箱服务商的开通说明都有这个按钮。对话里的 AI 可以用 `mishu_detail` 查一件事的完整记录；要改状态时会先问你。
 
-卡片可以拖动：拖到"替你办了"就是办完，拖到"我记着"就是明天再提醒，从"我记着"拖回"要你处理"就是现在处理。三栏之间的分隔条也能拖动调宽度，双击恢复等宽。
+**复制**：展开的卡片右上角有一个"复制"，一点就把这张卡片的内容拷成纯文本——标题、什么时候到期、是什么、问题在哪、怎么办、链接、小秘书做了什么、来自哪几条通知，按屏幕上的顺序排好。粘贴到对话、邮件或笔记里就能直接用。卡片展开后正文也可以直接用鼠标选中、按 ⌘/Ctrl+C 复制。
+
+卡片可以拖动（拖标题那一行）：拖到"替你办了"就是办完，拖到"我记着"就是明天再提醒，从"我记着"拖回"要你处理"就是现在处理。三栏之间的分隔条也能拖动调宽度，双击恢复等宽。
 
 **设置**：点页面顶部的"设置"，按秘书的活分成四块：① 它看哪里（GitHub、邮箱、自己关注的网址）；② 什么事要告诉你（哪些算急事、各类别提前几天）；③ 什么时候、怎么告诉你（主动提醒，见下）；④ 能替你办什么（在 GitHub 上标已读的方式；邮件哪些事要你点头）。最后是语言和密码存在哪。每块都是折叠的卡片，平时只显示标题，点开才展开，一次只开一张；里面的邮箱账户、通知渠道也是同样可折叠的卡片，开关就在标题右边，不展开也能点。
 
@@ -262,7 +264,9 @@ Filter the board by source: All, GitHub, Mail, Watching, Noted.
 
 **+AI**: when something is unclear, press the colourful "+AI". It opens a new chat with the item's explanation, link and related notifications in the input box — unsent — so you can read it, add your question and press send. Every card, the summary, source errors and each mail provider's setup note have one. In that chat the AI can use `mishu_detail` to look an item up in full, and asks you before changing anything.
 
-Cards can be dragged: onto "Done for you" to mark done, onto "Keeping for you" to snooze until tomorrow, from "Keeping for you" back to "To handle" to handle it now. The dividers between the columns can be dragged too; double-click one to make the columns equal.
+**Copy**: an unfolded card has a "Copy" button at its top right. One click puts the card on the clipboard as plain text — title, when it is due, what it is, where the problem is, what to do, the link, what the secretary did and which notifications it came from, in the order you see it — ready to paste into a chat, an email or a note. The unfolded body can also be selected with the mouse and copied with ⌘/Ctrl+C.
+
+Cards can be dragged by their title row: onto "Done for you" to mark done, onto "Keeping for you" to snooze until tomorrow, from "Keeping for you" back to "To handle" to handle it now. The dividers between the columns can be dragged too; double-click one to make the columns equal.
 
 **Settings**: the "Settings" tab at the top of the page: language, warning days per category, GitHub (on/off, where the token comes from, connection test, how to mark read), mail accounts (add, test, check now, edit, delete). Every block is a folded card that shows only its title until you click it, and only one is open at a time; mail accounts and notification channels fold the same way, with their switch on the title row so you can flip it without opening the card.
 

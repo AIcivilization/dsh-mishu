@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { mishuApi, restartApi, type BoardCard, type BoardData, type CardAction, type MatterDetail, type NewItem } from './api.ts'
 import { AskAI, type OpenChat } from './AskAI.tsx'
+import { cardText } from './cardText.ts'
+import { CopyButton } from './Copy.tsx'
 import { MishuMail } from './Mail.tsx'
 import { MishuSettings } from './Settings.tsx'
 import { TEXT, uiLang, type UiLang } from './text.ts'
@@ -381,19 +383,20 @@ function Card({ item, column, lang, locale, busy, label, openChat, open, onToggl
       <div className={`mishu-row-explain ${className}`}><span className="mishu-row-label">{name}</span><span>{text}</span></div>
     )
 
+  const movable = item.target === 'matter' && column !== 'done'
   return (
-    <div
-      className={`mishu-card ${open ? 'open' : ''} ${item.tone === 'normal' ? '' : item.tone}`}
-      draggable={item.target === 'matter' && column !== 'done'}
-      onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; onDragStart() }}
-      onDragEnd={onDragEnd}
-    >
+    <div className={`mishu-card ${open ? 'open' : ''} ${item.tone === 'normal' ? '' : item.tone}`}>
       <div
         className="mishu-card-head"
         role="button"
         tabIndex={0}
         aria-expanded={open}
         title={open ? t.hide : compact ? t.explainDone : t.detail}
+        // Dragging lives on the title row only, so the unfolded body below stays
+        // selectable: text inside a draggable element cannot be selected with a mouse.
+        draggable={movable}
+        onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; onDragStart() }}
+        onDragEnd={onDragEnd}
         onClick={onToggle}
         onKeyDown={(event) => {
           if (event.key !== 'Enter' && event.key !== ' ') return
@@ -406,7 +409,10 @@ function Card({ item, column, lang, locale, busy, label, openChat, open, onToggl
       </div>
       {open ? (
         <div className="mishu-card-body">
-          <div className="mishu-card-meta">{item.meta}</div>
+          <div className="mishu-card-top">
+            <div className="mishu-card-meta">{item.meta}</div>
+            <CopyButton lang={lang} text={() => cardText(item, detail !== undefined && !('error' in detail) ? detail : undefined, column, lang)} />
+          </div>
           {!compact && explain !== null ? (
             <div className="mishu-explain">
               {row(t.what, explain.what)}

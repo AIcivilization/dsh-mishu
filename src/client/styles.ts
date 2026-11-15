@@ -42,17 +42,26 @@ export const STYLES = `
 .mishu-col-head span{color:${MUTED};font-weight:400}
 .mishu-empty{color:${FAINT};padding:8px 4px}
 .mishu-card{background:${LAYER2};border:1px solid ${LINE};border-radius:8px;padding:6px 8px;margin-bottom:8px}
-.mishu-card[draggable=true]{cursor:grab}
 .mishu-card.danger{border-color:${DANGER}}
 .mishu-card.open{padding-bottom:8px}
 .mishu-card-head{display:flex;align-items:flex-start;gap:6px;width:100%;font:inherit;font-size:13px;text-align:left;color:inherit;background:transparent;border:0;border-radius:6px;padding:3px 4px;cursor:pointer}
+.mishu-card-head[draggable=true]{cursor:grab}
+.mishu-card-head[draggable=true]:active{cursor:grabbing}
 .mishu-card-head:hover{background:${HOVER}}
 .mishu-card-head:focus-visible{outline:2px solid ${ACCENT};outline-offset:1px}
 .mishu-caret{flex:0 0 auto;width:0;height:0;margin-top:6px;border-left:4px solid ${FAINT};border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .12s}
 .mishu-card.open .mishu-caret{transform:rotate(90deg);border-left-color:${ACCENT}}
 .mishu-card-body{padding:0 4px}
+/* The unfolded card is reading matter: let it be selected by hand and copied with Ctrl/⌘+C too. */
+.mishu-card.open .mishu-card-body{user-select:text;-webkit-user-select:text}
 .mishu-card-title{font-weight:600;word-break:break-word;min-width:0;flex:1 1 auto}
 .mishu-card-meta{font-size:12px;color:${MUTED};margin-top:2px}
+.mishu-card-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.mishu-card-top .mishu-card-meta{flex:1 1 auto;min-width:0}
+.mishu-copy-wrap{flex:0 0 auto;display:inline-flex;align-items:center}
+.mishu-copy{font-size:11px;padding:1px 8px;opacity:.85}
+.mishu-copy:hover{opacity:1}
+.mishu-copy.done{border-color:${OK};color:${OK}}
 .mishu-card.danger .mishu-card-meta{color:${DANGER}}
 .mishu-card.warn .mishu-card-meta{color:${WARN}}
 .mishu-card-note{font-size:12px;color:${MUTED};margin-top:4px;word-break:break-word}
