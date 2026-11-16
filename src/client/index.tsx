@@ -4,8 +4,11 @@
  * share one id, the same way DSH's own task manager is wired.
  */
 
+import { createRoot, type Root } from 'react-dom/client'
 import { MishuBoard } from './Board.tsx'
-import { STYLES } from './styles.ts'
+import { NoteCapture, ALL_STYLES, installCaptureShortcut, type CaptureLang } from './NoteCapture.tsx'
+import { settingsApi } from './api.ts'
+import { uiLang } from './text.ts'
 
 export const PACKAGE_NAME = 'dsh-mishu'
 export const inject = ['slots', 'locale']
@@ -55,7 +58,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
     const style = document.createElement('style')
     style.dataset.dshPlugin = PACKAGE_NAME
-    style.textContent = STYLES
+    style.textContent = ALL_STYLES
     document.head.append(style)
     return () => { style.remove() }
   }, 'dsh-mishu: styles')
@@ -81,4 +84,50 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     label: () => t('panel'),
   }, MishuIcon))
+
+  // Alt+Space anywhere in the app: the point of the shortcut is that the
+  // thought arrives while you are somewhere else, so it mounts its own overlay
+  // instead of depending on the board being open.
+  ctx.effect(() => {
+    const host = document.createElement('div')
+    host.dataset.dshPlugin = PACKAGE_NAME
+    let mounted: { root: Root; unmount: () => void } | undefined
+    let opening = false
+
+    const close = () => {
+      mounted?.root.unmount()
+      mounted?.unmount()
+      mounted = undefined
+      host.remove()
+    }
+
+    const open = () => {
+      if (mounted !== undefined || opening) return
+      opening = true
+      // Asked on every open, not cached: the setting may have changed on the
+      // settings page since the last time this key was pressed.
+      void settingsApi.load(locale()).then((result) => {
+        opening = false
+        if (mounted !== undefined) return
+        const organize = result.ok ? result.view.settings.notes.organise : false
+        document.body.append(host)
+        const root = createRoot(host)
+        mounted = { root, unmount: close }
+        root.render(
+          <NoteCapture
+            lang={uiLang(locale()) as CaptureLang}
+            organize={organize}
+            onClose={() => { mounted?.root.unmount(); mounted = undefined; host.remove() }}
+          />,
+        )
+      })
+    }
+
+    const dispose = installCaptureShortcut(open)
+    return () => {
+      dispose()
+      close()
+      host.remove()
+    }
+  }, 'dsh-mishu: Alt+Space capture')
 }

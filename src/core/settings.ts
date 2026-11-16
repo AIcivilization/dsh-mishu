@@ -19,6 +19,8 @@ export interface Defaults {
   githubEnabled: boolean
   markRead: MarkReadMode
   leadDays: Record<Category, number>
+  /** The note tab: whether a model may trim a saved note. Off unless you turn it on. */
+  notes: { organise: boolean }
 }
 
 export interface UserSettings {
@@ -26,6 +28,7 @@ export interface UserSettings {
   githubEnabled?: boolean
   markRead?: MarkReadMode
   leadDays?: Partial<Record<Category, number>>
+  notes?: { organise?: boolean }
 }
 
 const SETTINGS_KEY = 'settings'
@@ -39,6 +42,7 @@ export function effectiveSettings(store: MishuStore, defaults: Defaults): Defaul
     githubEnabled: saved.githubEnabled ?? defaults.githubEnabled,
     markRead: saved.markRead ?? defaults.markRead,
     leadDays: { ...defaults.leadDays, ...saved.leadDays },
+    notes: { organise: saved.notes?.organise ?? defaults.notes.organise },
   }
 }
 
@@ -62,6 +66,9 @@ export function saveSettings(store: MishuStore, input: UserSettings, now: number
       lead[category as Category] = days
     }
     next.leadDays = lead
+  }
+  if (input.notes !== undefined && input.notes.organise !== undefined) {
+    next.notes = { ...next.notes ?? {}, organise: input.notes.organise === true }
   }
   store.set(SETTINGS_KEY, next)
   store.log(now, 'settings', next)

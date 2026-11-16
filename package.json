@@ -1,7 +1,7 @@
 {
   "name": "dsh-mishu",
-  "version": "0.8.1",
-  "description": "DSH secretary (小秘书) for DeepSeek Harness (dsh): watches GitHub notifications and the dated things you tell it (bills, renewals, documents, birthdays), closes what is already resolved, and keeps a short list of what actually needs you. Its mail tab reads, searches, answers and sends (drafts on disk, scheduled sends, folder management, Trash-first deletes). Bilingual (中文 / English), macOS / Windows / Linux. · DSH 小秘书：提醒、通知、待办、消息、收件箱、秘书。GitHub 通知按当前状态分诊，交代一句就记下到期和周期事项；邮件能收能发，草稿在本机，可以定时、批量标记、只经过废纸篓才真删。",
+  "version": "0.9.0",
+  "description": "DSH secretary (小秘书) for DeepSeek Harness (dsh): watches GitHub notifications and the dated things you tell it (bills, renewals, documents, birthdays), closes what is already resolved, and keeps a short list of what actually needs you. Notes (随手贴) with Alt+Space capture, rules for category and date, one-click reminders and Markdown export. Its mail tab reads, searches, answers and sends (drafts on disk, scheduled sends, folder management, Trash-first deletes). Bilingual (中文 / English), macOS / Windows / Linux. · DSH 小秘书：提醒、通知、待办、消息、收件箱、便签、随手贴、速记、秘书。GitHub 通知按当前状态分诊，交代一句就记下到期和周期事项；Alt+Space 随手记一句话，规则判类别和日期，认出的日期能一键变提醒；邮件能收能发，草稿在本机，可以定时、批量标记、只经过废纸篓才真删。",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -20,6 +20,14 @@
     "feishu",
     "lark",
     "telegram",
+    "notes",
+    "note",
+    "stickynote",
+    "sticky-note",
+    "quick-capture",
+    "便签",
+    "随手贴",
+    "速记",
     "secretary"
   ],
   "repository": {

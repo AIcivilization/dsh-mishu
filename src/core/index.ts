@@ -23,7 +23,7 @@ export {
 } from './manual.ts'
 export { DEFAULT_DEMOTION, isActive, isDemoted, setStatusByUser, snoozeByUser, type DemotionPolicy } from './matters.ts'
 export { CATEGORIES, CATEGORY_LABELS, DEFAULT_LEAD_DAYS, REPEATS, type Category, type Repeat } from './recur.ts'
-export { MishuStore, type Matter, type MatterStatus, type Series } from './store.ts'
+export { MishuStore, type Matter, type MatterStatus, type Note, type NoteAiState, type NotePatch, type NoteSend, type NoteStatus, type Series } from './store.ts'
 export { addDays, dayOf, formatMoment } from './time.ts'
 export {
   MAIL_PRESETS, normalizePassword, presetById, presetForAddress, providerMismatch, resolveAccount, secretAccount, senderOf, smtpOf,
@@ -58,6 +58,18 @@ export {
   deleteWatch, dueWatches, entryKey, parseKeywords, resolveWatch, saveWatch, watchById, watchReportKey, watchSources,
   WATCH_SOURCE, type WatchInput, type WatchReport, type WatchSource,
 } from './watch/source.ts'
+export {
+  applyOrganise, captureNote, exportNotesMarkdown, markOrganiseFailed, MAX_NOTE_TAGS, MAX_NOTE_TEXT, newNoteId,
+  normalizeOrganise, NOTE_PROMPT_REV, noteTitle, noteToSeries, noteView, pendingNotes, purgeNote, recordNoteSend,
+  renderNoteDelivery, setNoteStatus, updateNote,
+  type CaptureInput, type CaptureResult, type NormalisedOrganise, type NoteView, type OrganiseResult, type UpdateInput,
+} from './notes/note.ts'
+export {
+  bodyScore, categoryLabel, classifyByRule, describeDue, detectDueHint, DUPLICATE_THRESHOLD,
+  findSimilar, isNoteCategory, jaccard, NOTE_CATEGORIES, NOTE_CATEGORY_LABELS, overlapCoefficient, RELATED_THRESHOLD,
+  resolveDueAt, similarity, tokenize,
+  type CategorySource, type DueHint, type NoteCategory, type ResolvedDue, type RuleVerdict, type SimilarityInput,
+} from './notes/rules.ts'
 export { describeWatchError, httpFetch, parseFeed, parseJson, parsePage, plainText, readWatchBody, type WatchFetch, type WatchItem } from './watch/fetch.ts'
 export { describeKeywords, describeWatch, diffItems, judgeWatch, syncWatch } from './watch/sync.ts'
 export {

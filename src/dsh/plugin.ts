@@ -10,7 +10,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import {
-  bi, dayOf, describeActiveSeries, mishuPaths, MishuStore, pick, renderClosed, setStatusByUser, stopSeries, tickManual,
+  bi, dayOf, describeActiveSeries, detectLang, mishuPaths, MishuStore, pick, renderClosed, setStatusByUser, stopSeries, tickManual,
   type Lang, type MatterStatus,
 } from '../core/index.ts'
 import type { MishuConfig } from './config.ts'
@@ -18,6 +18,9 @@ import { API_BASE, apiHandlers, handle } from './api.ts'
 import { Runtime } from './runtime.ts'
 import type { ScheduleLike } from './schedule.ts'
 import { MAIL_APPROVAL_TOOLS, mailApproval, registerMailTools, type MailToolDeps } from './mail-tools.ts'
+import { noteHandlers } from './notes-api.ts'
+import { createOrganiser } from './notes-ai.ts'
+import { registerNoteTools } from './notes-tools.ts'
 import { ADD_TOOL, addApproval, describeChange, registerTools } from './tools.ts'
 
 interface CommandsLike {
@@ -77,6 +80,15 @@ const VERBS: Record<string, string> = {
 export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(config, ctx.logger)): void {
   const paths = mishuPaths(config.home)
   const say = (lang: Lang, zh: string, en: string) => pick(bi(zh, en), lang)
+  /** Read on every call: the setting lives in the notebook, not in memory. */
+  const notesOrganise = () => runtime.store !== undefined && runtime.settings().notes.organise
+  const organiser = createOrganiser(ctx, {
+    store: () => runtime.store,
+    lang: () => runtime.lang(),
+    logger: ctx.logger,
+    now: Date.now,
+    enabled: notesOrganise,
+  })
 
   ctx.effect(() => {
     runtime.store = MishuStore.open(paths.db)
@@ -115,6 +127,7 @@ export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(c
       clearInterval(syncTimer)
       clearInterval(notifyTimer)
       clearInterval(sendTimer)
+      organiser.stop()
       await Promise.race([runtime.idle(), new Promise(resolve => setTimeout(resolve, 5000).unref())])
       opened.close()
       runtime.store = undefined
@@ -156,6 +169,10 @@ export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(c
       brief: () => runtime.brief(),
       markRead: () => runtime.settings().markRead,
     }).catch(error => ctx.logger.warn(`dsh-mishu: tools not registered (${(error as Error).message})`))
+    void registerNoteTools(scoped.tools, {
+      store: () => runtime.store,
+      lang: () => runtime.lang(),
+    }).catch(error => ctx.logger.warn(`dsh-mishu: note tools not registered (${(error as Error).message})`))
     scoped.on('tools/pre-execute', async (exec, next) => {
       const decision = await next()
       if (decision.kind !== 'allow') return decision
@@ -174,7 +191,7 @@ export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(c
   // The page's API, on DSH's own authenticated `/api` channel.
   ctx.inject(['connection'], (webCtx) => {
     const connection = (webCtx as unknown as { connection: ConnectionLike }).connection
-    for (const [path, handler] of Object.entries(apiHandlers(runtime))) {
+    const register = (path: string, handler: Parameters<typeof handle>[0]) => {
       webCtx.effect(() => connection.fetch.register({
         path: `${API_BASE}${path}`,
         methods: ['POST'],
@@ -182,6 +199,21 @@ export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(c
         fetch: request => handle(handler, request, () => runtime.fixedLang()),
       }))
     }
+    for (const [path, handler] of Object.entries(apiHandlers(runtime))) register(path, handler)
+    for (const [path, handler] of Object.entries(noteHandlers({
+      store: lang => {
+        const store = runtime.store
+        if (store === undefined) throw new Error(say(lang, '小秘书的记事本没有打开', 'The notebook is not open'))
+        return store
+      },
+      organize: (id, lang) => organiser.organise(id, lang),
+      hasModel: () => organiser.available(),
+      organiseAllowed: () => notesOrganise() && organiser.available(),
+      now: Date.now,
+      fixedLang: () => runtime.fixedLang(),
+      detectLang,
+      counts: store => store.noteCounts(),
+    }))) register(path, handler)
   })
 
   // DSH's own scheduled tasks ("自动化任务"). Optional: a Host without the

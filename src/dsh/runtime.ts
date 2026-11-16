@@ -61,7 +61,13 @@ export class Runtime {
   }
 
   defaults(): Defaults {
-    return { language: this.config.language, githubEnabled: this.config.github.enabled, markRead: this.config.github.markRead, leadDays: this.config.leadDays }
+    return {
+      language: this.config.language,
+      githubEnabled: this.config.github.enabled,
+      markRead: this.config.github.markRead,
+      leadDays: this.config.leadDays,
+      notes: { organise: this.config.notes.organise },
+    }
   }
 
   settings(): Defaults {

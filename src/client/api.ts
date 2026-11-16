@@ -129,6 +129,8 @@ export interface SettingsView {
     githubEnabled: boolean
     markRead: 'off' | 'shadow' | 'on'
     leadDays: Record<string, number>
+    /** The note tab: whether note text may go to the model. Off unless turned on. */
+    notes: { organise: boolean }
   }
   github: {
     tokenEnv: string

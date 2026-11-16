@@ -67,6 +67,8 @@ test('the shell mounts with schema defaults, gates mishu_add behind approval, an
       'mishu_mail_list', 'mishu_mail_read', 'mishu_mail_search', 'mishu_mail_mark', 'mishu_mail_folders',
       'mishu_mail_attachment', 'mishu_mail_send', 'mishu_mail_reply', 'mishu_mail_draft',
       'mishu_add', 'mishu_list', 'mishu_detail', 'mishu_update', 'mishu_stop',
+      'mishu_note_capture', 'mishu_note_search', 'mishu_note_get', 'mishu_note_promote',
+      'mishu_note_to_reminder', 'mishu_note_append',
     ])
 
     const due = tomorrow()
@@ -114,6 +116,105 @@ test('in English, the same shell speaks English and still accepts Chinese comman
     assert.ok((await dsh.command('series')).text.includes(`#1 Pay rent · monthly on day ${Number(due.slice(8))}${Number(due.slice(8)) >= 29 ? ' (month end when shorter)' : ''}; next ${addMonths(due, 1)}`))
     assert.match((await dsh.command('help')).text, /\/mishu sync — sync now \(GitHub and mail\)/)
     await assert.rejects(dsh.tool('mishu_add').execute({ title: 'x', due: 'soon' }), /not a valid date/)
+  } finally {
+    await dsh.dispose()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('the note tab works end to end through the shell: capture, search, edit, trash, purge', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'mishu-note-'))
+  const dsh = fakeDsh()
+  try {
+    const config = Config({ home, language: 'zh', github: { enabled: false } })
+    apply(dsh.ctx, config, offline(config))
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    const captured = await dsh.api('/api/dsh-mishu/note-capture', { lang: 'zh', text: '护照 2027-03-10 到期' })
+    assert.equal(captured.json.ok, true)
+    const note = captured.json.note as Record<string, unknown>
+    assert.equal(note.text, '护照 2027-03-10 到期', 'stored verbatim')
+    assert.equal(note.category, '未分类', 'no rule claims a passport expiry')
+    assert.equal(typeof captured.json.due, 'object', 'the date is recognised without a model')
+    assert.equal((captured.json.due as { day: string }).day, '2027-03-10')
+    const id = String(note.id)
+
+    const listed = await dsh.api('/api/dsh-mishu/note-list', { lang: 'zh' })
+    assert.equal((listed.json.notes as unknown[]).length, 1)
+    assert.deepEqual(listed.json.counts, { live: 1, archived: 0, deleted: 0 })
+
+    const found = await dsh.api('/api/dsh-mishu/note-search', { lang: 'zh', q: '护照' })
+    assert.equal((found.json.notes as unknown[]).length, 1)
+
+    const edited = await dsh.api('/api/dsh-mishu/note-update', { lang: 'zh', id, rev: note.rev, text: '护照 2027-03-10 到期，提前 90 天办' })
+    assert.equal(edited.json.ok, true)
+    const after = edited.json.note as Record<string, unknown>
+    assert.equal(after.text, '护照 2027-03-10 到期，提前 90 天办')
+    assert.equal(Number(after.rev), Number(note.rev) + 1)
+
+    const stale = await dsh.api('/api/dsh-mishu/note-update', { lang: 'zh', id, rev: note.rev, text: '不该盖掉' })
+    assert.equal(stale.json.ok, false, 'a save naming an old revision is refused')
+    assert.match(String(stale.json.message), /改过了/)
+
+    const trashed = await dsh.api('/api/dsh-mishu/note-status', { lang: 'zh', id, status: 'deleted' })
+    assert.equal((trashed.json.counts as Record<string, number>).deleted, 1)
+
+    // Purge only works from the trash, and only on the second call.
+    const restored = await dsh.api('/api/dsh-mishu/note-status', { lang: 'zh', id, status: 'live' })
+    assert.equal((restored.json.counts as Record<string, number>).live, 1)
+    const refused = await dsh.api('/api/dsh-mishu/note-purge', { lang: 'zh', id })
+    assert.equal(refused.json.ok, false, 'a live note cannot be purged in one click')
+    await dsh.api('/api/dsh-mishu/note-status', { lang: 'zh', id, status: 'deleted' })
+    const purged = await dsh.api('/api/dsh-mishu/note-purge', { lang: 'zh', id })
+    assert.equal(purged.json.ok, true)
+
+    const rendered = await dsh.api('/api/dsh-mishu/note-render', { lang: 'zh', id })
+    assert.equal(rendered.json.ok, false, 'the note is gone')
+  } finally {
+    await dsh.dispose()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('the note API says plainly why it will not organise, instead of spinning', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'mishu-note-'))
+  const dsh = fakeDsh()
+  try {
+    // No model service in this fake Host, and the setting defaults to off.
+    const config = Config({ home, language: 'en', github: { enabled: false } })
+    assert.equal(config.notes.organise, false, 'organising is off unless you turn it on')
+    apply(dsh.ctx, config, offline(config))
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    const captured = await dsh.api('/api/dsh-mishu/note-capture', { lang: 'en', text: 'a thought' })
+    const id = String((captured.json.note as Record<string, string>).id)
+    assert.equal((captured.json.note as Record<string, string>).aiState, 'skipped', 'a note is never left pending without a model')
+
+    const organised = await dsh.api('/api/dsh-mishu/note-organize', { lang: 'en', id })
+    assert.equal(organised.json.ok, false)
+    assert.match(String(organised.json.message), /off by default|no model service/)
+  } finally {
+    await dsh.dispose()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('a captured note turns into a reminder through the API, and the note remembers it', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'mishu-note-'))
+  const dsh = fakeDsh()
+  try {
+    const config = Config({ home, language: 'zh', github: { enabled: false } })
+    apply(dsh.ctx, config, offline(config))
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    const captured = await dsh.api('/api/dsh-mishu/note-capture', { lang: 'zh', text: '交房租 每月 15 号' })
+    const id = String((captured.json.note as Record<string, string>).id)
+    const toSeries = await dsh.api('/api/dsh-mishu/note-to-series', { lang: 'zh', id, due: '2026-12-15', repeat: 'monthly' })
+    assert.equal(toSeries.json.ok, true)
+    assert.equal(Number((toSeries.json.note as Record<string, unknown>).seriesId), Number(toSeries.json.seriesId))
+
+    const board = await dsh.api('/api/dsh-mishu/board', { lang: 'zh' })
+    assert.equal(board.json.ok, true, 'the reminder shows up on the board')
   } finally {
     await dsh.dispose()
     rmSync(home, { recursive: true, force: true })

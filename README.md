@@ -166,9 +166,27 @@ dsh plugin --profile <name> add dsh-mishu
       markReadReasons: [merged, closed, recovered, superseded, ref-gone]
     leadDays: { document: 90, bill: 3, birthday: 7, renewal: 7, other: 1 }
     upcomingDays: 30            # 简报里"快到了"往后看多少天
+    notes:
+      organise: false           # 让模型整理便签（默认关：关着时便签原文不出这台电脑）
 ```
 
 记事本是 `~/.mishu/mishu.db`（SQLite），只存元数据和简短备注，不存邮件正文和 token。在 macOS / Linux 上，这个目录只有你本人能读写。卸载插件不会删它。
+
+**随手贴**：`Alt+Space` 在任何地方敲开一个框，写完 `Ctrl+Enter` 保存 —— 先落盘，再谈别的。便签在「随手贴」页签里，三档：便签 / 归档 / 废纸篓。
+
+| 能力 | 说明 |
+|---|---|
+| 捕获 | `Alt+Space` 或页签里的输入框；快速、离屏、不打断你正在做的事 |
+| 归类 | 规则先判（域名指纹、关键词表）；判不出来就留「未分类」，**从不猜** |
+| 日期 | 规则认出「明天」「下周三」「3 月 10 日」「月底」；「有空」「改天」故意不认 |
+| +AI | 可选。默认**关着**，关着时便签原文一个字都不出这台电脑；打开后才把原文发给当前对话用的模型 |
+| 变成提醒 | 便签认出了日期，一键变成秘书的周期事项；也可以手动选日子、选重复（每周/每月/每年） |
+| 投递 | 「加到当前对话」把便签作为引用块放进新对话输入框（未发送，你能改）；没有 workspace 服务就退回复制到剪贴板 |
+| 导出 | 一键导出全部便签为单个 Markdown，给 grep / Obsidian / 备份用 |
+
+三条硬规矩：**原文永不被改写**；`+AI` 角标只在真正整理完成时亮（改过原文后旧结果会标「基于更早的版本」，但不会丢）；`rev` 只增不减，两边同时改时后手被拒绝而不是覆盖。
+
+模型工具：`mishu_note_capture`（记一条）、`mishu_note_search`、`mishu_note_get`、`mishu_note_promote`（渲染成可投递的 Markdown）、`mishu_note_to_reminder`（变成提醒）、`mishu_note_append`（把聊出来的结论追加回便签，只追加不覆盖）。
 
 ### 还没做
 
@@ -326,6 +344,22 @@ dsh plugin --profile <name> add dsh-mishu
 Override settings in the profile's `cordis.patch.yml` (see the Chinese section for the full example; the keys are the same). `language` is `auto` (follow the system locale), `zh` or `en`.
 
 The notebook is `~/.mishu/mishu.db` (SQLite). It keeps metadata and short notes only, never email bodies or tokens. On macOS and Linux the directory is readable and writable by you alone. Uninstalling the plugin leaves it in place.
+
+**Notes (随手贴)**: `Alt+Space` opens a box anywhere in the app; `Ctrl+Enter` saves it. Saved first, everything else second. The notes live in the "Notes" tab, in three lists: notes / archived / trash.
+
+| What | How |
+|---|---|
+| Capture | `Alt+Space`, or the box at the top of the tab. Fast, out of the way, without leaving what you were doing |
+| Category | A rule places it (domain fingerprints, key words); when no rule knows, it stays "Unsorted" — it **never guesses** |
+| Date | Rules read "tomorrow", "next Wednesday", "3 March", "end of the month"; "someday" and "when I get a chance" deliberately resolve to nothing |
+| +AI | Optional, and **off by default**: while it is off, not one word of a note leaves this computer. Turn it on and note text goes to the model the current chat is using |
+| Reminder | A note that names a day becomes a repeating reminder in one click; or pick the day and the repeat (weekly / monthly / yearly) yourself |
+| Deliver | "Add to current chat" puts the note in a new chat's input box as a quoted block, unsent and editable; without DSH's workspace service it falls back to the clipboard |
+| Export | Every note as one Markdown file, for grep, Obsidian or a backup |
+
+Three rules hold it up: **your words are never rewritten**; the `+AI` badge is on only when a run actually finished (after you edit the text the old result is marked "based on an earlier version", never thrown away); and `rev` only goes up, so two tabs cannot silently overwrite each other — the later save is refused instead.
+
+Agent tools: `mishu_note_capture`, `mishu_note_search`, `mishu_note_get`, `mishu_note_promote` (render as delivery Markdown), `mishu_note_to_reminder`, `mishu_note_append` (put a conclusion back on a note — append only, never replaced).
 
 ### Not done yet
 

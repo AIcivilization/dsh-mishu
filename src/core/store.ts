@@ -12,7 +12,7 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { Category, Repeat } from './recur.ts'
 
-const SCHEMA_VERSION = 5
+const SCHEMA_VERSION = 6
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS matters (
@@ -101,11 +101,42 @@ CREATE TABLE IF NOT EXISTS drafts (
   updated_at  INTEGER NOT NULL,
   sent_at     INTEGER
 );
+CREATE TABLE IF NOT EXISTS notes (
+  id              TEXT    PRIMARY KEY,
+  rev             INTEGER NOT NULL,
+  text            TEXT    NOT NULL,
+  category        TEXT    NOT NULL DEFAULT '未分类',
+  category_source TEXT    NOT NULL DEFAULT 'rule' CHECK (category_source IN ('rule', 'model', 'user')),
+  tags            TEXT    NOT NULL DEFAULT '[]',
+  ai_state        TEXT    NOT NULL DEFAULT 'skipped' CHECK (ai_state IN ('pending', 'running', 'done', 'failed', 'skipped')),
+  ai_title        TEXT,
+  ai_points       TEXT    NOT NULL DEFAULT '[]',
+  ai_todos        TEXT    NOT NULL DEFAULT '[]',
+  ai_due_hint     TEXT,
+  ai_prompt_rev   INTEGER NOT NULL DEFAULT 0,
+  ai_based_on_rev INTEGER NOT NULL DEFAULT 0,
+  due_day         TEXT,
+  series_id       INTEGER,
+  status          TEXT    NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'archived', 'deleted')),
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL,
+  deleted_at      INTEGER
+);
+CREATE TABLE IF NOT EXISTS note_sends (
+  id      INTEGER PRIMARY KEY,
+  note_id TEXT    NOT NULL,
+  at      INTEGER NOT NULL,
+  target  TEXT    NOT NULL,
+  text    TEXT
+);
 CREATE INDEX IF NOT EXISTS matters_by_status ON matters(status, closed_at);
 CREATE INDEX IF NOT EXISTS drafts_by_account ON drafts(account, updated_at);
 CREATE INDEX IF NOT EXISTS drafts_by_time ON drafts(state, send_at);
 CREATE INDEX IF NOT EXISTS messages_by_matter ON messages(matter_key);
 CREATE INDEX IF NOT EXISTS messages_unread ON messages(source, unread);
+CREATE INDEX IF NOT EXISTS notes_by_status ON notes(status, updated_at);
+CREATE INDEX IF NOT EXISTS notes_by_series ON notes(series_id);
+CREATE INDEX IF NOT EXISTS note_sends_by_note ON note_sends(note_id);
 `
 
 export type MatterStatus = 'open' | 'done' | 'dismissed'
@@ -206,6 +237,82 @@ export interface RuleStats {
   corrected: number
 }
 
+/** A note: what you jotted down, plus what was worked out about it. */
+export interface Note {
+  /** `2026-11-15T09-14-22-a3f1` — created once, never renamed. */
+  id: string
+  /** Bumped on every write; the only basis for merging two tabs' copies. */
+  rev: number
+  /** Your words. Nothing rewritten by a model ever lands here. */
+  text: string
+  category: string
+  /** Once `user`, nothing but you changes it again. */
+  categorySource: 'rule' | 'model' | 'user'
+  tags: string[]
+  aiState: NoteAiState
+  aiTitle: string | null
+  aiPoints: string[]
+  aiTodos: string[]
+  aiDueHint: string | null
+  /** Which prompt produced the AI half, so an old note can be told apart. */
+  aiPromptRev: number
+  /** The `rev` the AI half was written for; older than `rev` means "based on an earlier version". */
+  aiBasedOnRev: number
+  /** The day a reminder would fall on, when one was worked out. */
+  dueDay: string | null
+  /** The repeating thing this note became, if it did. */
+  seriesId: number | null
+  status: NoteStatus
+  createdAt: number
+  updatedAt: number
+  deletedAt: number | null
+}
+
+export type NoteStatus = 'live' | 'archived' | 'deleted'
+export type NoteAiState = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
+
+export type NotePatch = Partial<Omit<Note, 'id' | 'createdAt'>> & { rev?: number }
+
+/** One delivery of a note into a chat, kept so the card can say where it went. */
+export interface NoteSend {
+  at: number
+  /** `new-chat`, `current-chat` or `clipboard`. */
+  target: string
+  text: string | null
+}
+
+/** Note field → column, for the patch builder. */
+const NOTE_COLUMNS: Record<keyof Omit<Note, never>, string> = {
+  id: 'id',
+  rev: 'rev',
+  text: 'text',
+  category: 'category',
+  categorySource: 'category_source',
+  tags: 'tags',
+  aiState: 'ai_state',
+  aiTitle: 'ai_title',
+  aiPoints: 'ai_points',
+  aiTodos: 'ai_todos',
+  aiDueHint: 'ai_due_hint',
+  aiPromptRev: 'ai_prompt_rev',
+  aiBasedOnRev: 'ai_based_on_rev',
+  dueDay: 'due_day',
+  seriesId: 'series_id',
+  status: 'status',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  deletedAt: 'deleted_at',
+}
+
+/** Lists are stored as JSON: a comma is part of a sentence, not a separator. */
+const NOTE_JSON_FIELDS = new Set<keyof Note>(['tags', 'aiPoints', 'aiTodos'])
+
+function noteValue(key: keyof Note, value: unknown): string | number | null {
+  if (NOTE_JSON_FIELDS.has(key)) return JSON.stringify(value)
+  if (typeof value === 'boolean') return value ? 1 : 0
+  return value as string | number | null
+}
+
 /** A message being written: kept until it is sent or thrown away. */
 export interface Draft {
   id: string
@@ -268,6 +375,41 @@ type Row = Record<string, unknown>
 
 const str = (v: unknown) => (v === null || v === undefined ? null : String(v))
 const num = (v: unknown) => (v === null || v === undefined ? null : Number(v))
+
+function toNote(row: Row): Note {
+  return {
+    id: String(row.id),
+    rev: Number(row.rev),
+    text: String(row.text),
+    category: String(row.category),
+    categorySource: row.category_source as Note['categorySource'],
+    tags: jsonList(row.tags),
+    aiState: row.ai_state as NoteAiState,
+    aiTitle: str(row.ai_title),
+    aiPoints: jsonList(row.ai_points),
+    aiTodos: jsonList(row.ai_todos),
+    aiDueHint: str(row.ai_due_hint),
+    aiPromptRev: Number(row.ai_prompt_rev),
+    aiBasedOnRev: Number(row.ai_based_on_rev),
+    dueDay: str(row.due_day),
+    seriesId: num(row.series_id),
+    status: row.status as NoteStatus,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+    deletedAt: num(row.deleted_at),
+  }
+}
+
+function jsonList(value: unknown): string[] {
+  if (typeof value !== 'string' || value === '') return []
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    // A hand-edited database row must not take the whole list down.
+    return []
+  }
+}
 
 function toMatter(row: Row): Matter {
   return {
@@ -389,6 +531,8 @@ const PATCH_COLUMNS: Record<keyof MatterPatch, string> = {
 export class MishuStore {
   readonly path: string
   private readonly db: DatabaseSync
+  /** How many `transaction()` calls are open; see the note there. */
+  private depth = 0
 
   private constructor(path: string, db: DatabaseSync) {
     this.path = path
@@ -426,9 +570,17 @@ export class MishuStore {
     if (this.db.isOpen) this.db.close()
   }
 
-  /** Run `fn` in one transaction. */
+  /**
+   * Run `fn` in one transaction. Nested calls join the outer one instead of
+   * starting a second: several of the operations here are "make a reminder and
+   * link the note to it", and SQLite refuses a `BEGIN` inside a `BEGIN`. An
+   * inner failure therefore rolls the whole outer unit back, which is what
+   * those callers want — a half-written link is worse than a retry.
+   */
   transaction<T>(fn: () => T): T {
+    if (this.depth > 0) return fn()
     this.db.exec('BEGIN')
+    this.depth += 1
     try {
       const result = fn()
       this.db.exec('COMMIT')
@@ -436,6 +588,8 @@ export class MishuStore {
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
+    } finally {
+      this.depth -= 1
     }
   }
 
@@ -626,6 +780,109 @@ export class MishuStore {
   advanceSeries(id: number, nextK: number, active: boolean, now: number): void {
     this.db.prepare('UPDATE series SET next_k = ?, active = ?, stopped_at = CASE WHEN ? = 0 THEN ? ELSE stopped_at END WHERE id = ?')
       .run(nextK, active ? 1 : 0, active ? 1 : 0, now, id)
+  }
+
+  // ── notes ───────────────────────────────────────────────
+
+  /** How many notes sit in each of the three lists, for the tab's own labels. */
+  noteCounts(): { live: number; archived: number; deleted: number } {
+    const rows = this.db.prepare('SELECT status, COUNT(*) AS n FROM notes GROUP BY status').all() as Row[]
+    const out = { live: 0, archived: 0, deleted: 0 }
+    for (const row of rows) {
+      const status = String(row.status)
+      if (status === 'live' || status === 'archived' || status === 'deleted') out[status] = Number(row.n)
+    }
+    return out
+  }
+
+  noteById(id: string): Note | undefined {
+    const row = this.db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as Row | undefined
+    return row === undefined ? undefined : toNote(row)
+  }
+
+  /**
+   * Notes for the list, newest first. `trash` and `archived` are the two
+   * independent dimensions a note has; both default to "not that one".
+   */
+  notes(options: { trash?: boolean; archived?: boolean; limit?: number } = {}): Note[] {
+    const status = options.trash === true ? 'deleted' : options.archived === true ? 'archived' : 'live'
+    const limit = options.limit !== undefined && options.limit > 0 ? options.limit : 500
+    return (this.db.prepare('SELECT * FROM notes WHERE status = ? ORDER BY updated_at DESC, id DESC LIMIT ?')
+      .all(status, limit) as Row[]).map(toNote)
+  }
+
+  /** Every note not deleted — the pool similarity is computed against. */
+  liveNotes(limit = 2000): Note[] {
+    return (this.db.prepare("SELECT * FROM notes WHERE status != 'deleted' ORDER BY updated_at DESC LIMIT ?")
+      .all(limit) as Row[]).map(toNote)
+  }
+
+  insertNote(note: Note, now: number): Note {
+    this.db.prepare(`
+      INSERT INTO notes (id, rev, text, category, category_source, tags, ai_state, ai_title, ai_points, ai_todos,
+        ai_due_hint, ai_prompt_rev, ai_based_on_rev, due_day, series_id, status, created_at, updated_at, deleted_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      note.id, note.rev, note.text, note.category, note.categorySource, JSON.stringify(note.tags), note.aiState,
+      note.aiTitle, JSON.stringify(note.aiPoints), JSON.stringify(note.aiTodos), note.aiDueHint,
+      note.aiPromptRev, note.aiBasedOnRev, note.dueDay, note.seriesId, note.status,
+      note.createdAt, now, note.status === 'deleted' ? now : null,
+    )
+    return this.noteById(note.id)!
+  }
+
+  /**
+   * Write a note back. `rev` goes up by one unless the caller already set it;
+   * a caller that names an older `rev` than the one on disk is refused rather
+   * than allowed to overwrite whatever the other tab wrote.
+   */
+  updateNote(id: string, patch: NotePatch, now: number, expectedRev?: number): Note | undefined {
+    const current = this.noteById(id)
+    if (current === undefined) return undefined
+    if (expectedRev !== undefined && current.rev !== expectedRev) return undefined
+    const sets: string[] = []
+    const values: Array<string | number | null> = []
+    for (const [key, value] of Object.entries(patch) as Array<[keyof NotePatch, unknown]>) {
+      if (value === undefined) continue
+      sets.push(`${NOTE_COLUMNS[key]} = ?`)
+      values.push(noteValue(key, value))
+    }
+    if (sets.length === 0) return current
+    const rev = patch.rev ?? current.rev + 1
+    this.db.prepare(`UPDATE notes SET ${[...sets, 'rev = ?', 'updated_at = ?'].join(', ')} WHERE id = ?`)
+      .run(...values, rev, now, id)
+    return this.noteById(id)
+  }
+
+  deleteNotePermanently(id: string): void {
+    this.db.prepare('DELETE FROM notes WHERE id = ?').run(id)
+    this.db.prepare('DELETE FROM note_sends WHERE note_id = ?').run(id)
+  }
+
+  insertNoteSend(noteId: string, at: number, target: string, text: string): void {
+    this.db.prepare('INSERT INTO note_sends (note_id, at, target, text) VALUES (?, ?, ?, ?)').run(noteId, at, target, text)
+  }
+
+  noteSends(noteId: string): NoteSend[] {
+    return (this.db.prepare('SELECT * FROM note_sends WHERE note_id = ? ORDER BY at DESC').all(noteId) as Row[])
+      .map(row => ({ at: Number(row.at), target: String(row.target), text: str(row.text) }))
+  }
+
+  /** Free-text search over the original text, the title, the tags and the category. */
+  searchNotes(query: string, options: { limit?: number; includeDeleted?: boolean } = {}): Note[] {
+    const limit = options.limit !== undefined && options.limit > 0 ? options.limit : 50
+    // `instr` rather than LIKE: a note may contain % or _ and those must match
+    // themselves, not act as wildcards. FTS5 is deliberately not used — its
+    // default tokenizer treats a whole Chinese sentence as one token, so 护照
+    // would not find 护照到期.
+    const sql = `SELECT * FROM notes
+      WHERE (? = 1 OR status != 'deleted')
+        AND (instr(lower(text), lower(?)) > 0 OR instr(lower(coalesce(ai_title, '')), lower(?)) > 0
+             OR instr(lower(tags), lower(?)) > 0 OR instr(lower(category), lower(?)) > 0)
+      ORDER BY updated_at DESC, id DESC LIMIT ?`
+    return (this.db.prepare(sql).all(
+      options.includeDeleted === true ? 1 : 0, query, query, query, query, limit,
+    ) as Row[]).map(toNote)
   }
 
   // ── kv, log, rule stats ─────────────────────────────────

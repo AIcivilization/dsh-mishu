@@ -176,6 +176,15 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
             : view.secrets.file !== undefined ? t.sSecretsFile(view.secrets.file.path, view.secrets.file.why)
               : t.sSecretsAt(secretKind)}
         </p>
+        <label className="mishu-field mishu-checkbox">
+          <input
+            type="checkbox"
+            checked={view.settings.notes.organise}
+            onChange={e => { void save({ notes: { organise: e.target.checked } }) }}
+          />
+          {t.sNotesOrganise}
+        </label>
+        <p className="mishu-hint">{t.sNotesPrivacy}</p>
       </Fold>
     </div>
     </FoldGroup>

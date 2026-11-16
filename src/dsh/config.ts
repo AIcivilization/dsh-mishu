@@ -24,6 +24,15 @@ export interface MishuConfig {
   leadDays: Record<Category, number>
   /** How far ahead the brief lists things not yet due for a reminder. */
   upcomingDays: number
+  notes: {
+    /**
+     * Whether a saved note may be handed to the model for a title, points and
+     * a date. Off by default: the board's standing promise is that what is in
+     * the notebook stays on this computer, and rules already place what they
+     * can without asking anyone.
+     */
+    organise: boolean
+  }
 }
 
 export const Config: Schema<MishuConfig> = Schema.object({
@@ -47,4 +56,8 @@ export const Config: Schema<MishuConfig> = Schema.object({
     other: Schema.natural().default(DEFAULT_LEAD_DAYS.other).description('Everything else'),
   }).default({}),
   upcomingDays: Schema.natural().min(1).default(30).description('Days ahead the brief looks for upcoming items'),
+  notes: Schema.object({
+    organise: Schema.boolean().default(false)
+      .description('Let the model add a title, points and a date to a saved note (sends the note text to the model provider)'),
+  }).default({}),
 }) as Schema<MishuConfig>

@@ -90,6 +90,8 @@ export const STYLES = `
 .mishu-add-toggle{width:100%;text-align:left;border-style:dashed}
 .mishu-field{display:flex;flex-direction:column;gap:2px;margin-bottom:6px;font-size:12px;color:${MUTED}}
 .mishu-field input,.mishu-field select{font:inherit;font-size:13px;color:${TEXT};background:${LAYER2};border:1px solid ${LINE_STRONG};border-radius:6px;padding:4px 6px;width:100%}
+.mishu-field.mishu-checkbox{flex-direction:row;align-items:flex-start;gap:8px;margin:10px 0 4px;color:${TEXT}}
+.mishu-field.mishu-checkbox input{width:auto;margin-top:2px;flex:none;padding:0}
 .mishu-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .mishu-preview{white-space:pre-wrap;font-size:12px;background:${LAYER2};border-radius:6px;padding:6px 8px;margin:4px 0 6px;color:${TEXT}}
 .mishu-preview.mishu-danger{color:${DANGER}}
