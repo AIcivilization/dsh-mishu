@@ -109,6 +109,10 @@
 
 **重启 DSH**：页面顶部"设置"后面的按键。重装或升级插件后点它，桌面版会按正常方式退出（有任务在跑时会先问你），再自动打开。用 dsh-vps 装在服务器上的 DSH，由 dsh-gate 网关托管：点了之后 DSH 正常退出，网关几秒内把它重新拉起，页面断开一会儿后自动刷新。直接用 `dsh` 命令启动的 DSH 没法从页面重启（新的登录地址只会打印在那个终端里），按键会告诉你回终端按 Ctrl+C 再运行一次。Windows 和 Linux 桌面版的重启还没在真机上测过。
 
+**更新 DSH 插件**："重启 DSH"右边紧挨着的按键，两个按键画在同一个线框里，因为都是对着 DSH 本身做的事。点一下，小秘书把当前 profile 里装着的插件逐个问一遍有没有新版：官方 bundle 跟着 DSH 版本走，不动；Git 提交装的包没有版本列表，也不动；剩下的只装"能替换现在这个"的最新版（声明了 `dsh.bundle`、接受当前 DSH 版本、不是预发布、没被标记弃用）。装的时候一个一个来，按钮上显示进度；装完如果新版本要重启才生效，会提示点左边的"重启 DSH"。走的是 DSH 自己的 `pluginManager` 服务（和 DSH「插件」页同一条路：带 profile 锁、装失败自动还原），所以这个 DSH 没有那个服务时按键会说明只能在终端里 `dsh plugin add`。设置页「通用」里可以把这条按键关掉，顶部就只留"重启 DSH"。
+
+**Star**：和上面两个按键同一组。点开小秘书的 GitHub 仓库，星要用你自己的 GitHub 账号在那里点——插件替不了你点。
+
 **文字命令**：
 
 ```
@@ -300,6 +304,10 @@ The settings follow the secretary's job in four parts: 1. where it looks (GitHub
 **Handing the brief to DSH's scheduled tasks**: part 3 of the settings page can turn the daily brief into one of DSH's own scheduled tasks — instead of a notification it arrives as a conversation turn, there the next time you open DSH (including the mobile client). It uses DSH's built-in `schedule` service; the secretary creates exactly one task, titled "Secretary · daily brief", moves it when you change the brief's time, and deletes it when you turn it off. Below it, every scheduled task on this DSH is listed — including ones you made on DSH's own automation page — each with "run now" and delete. A DSH without that service says so in one line and keeps the desktop notification.
 
 **Restart DSH**: the button after "Settings" at the top of the page. After reinstalling or upgrading plugins, click it: the desktop app quits the normal way (asking first if a task is running) and opens again. On a server set up with dsh-vps, DSH runs under the dsh-gate gateway: DSH exits cleanly, the gateway starts it again within seconds, and the page reloads once it is back. DSH started directly with the `dsh` command cannot be restarted from the page (its new sign-in address is printed only in that terminal), so the button tells you to press Ctrl+C there and run it again. Restarting the Windows and Linux desktop apps is not yet tested on real machines.
+
+**Update DSH plugins**: the button right after "Restart DSH", inside the same outline, because both act on DSH itself. One click asks every plugin installed in this profile whether a newer version exists. Official bundles follow the DSH version and are left alone; a package installed from a Git commit has no version list and is left alone too; everything else gets the newest version that can replace what runs (declares `dsh.bundle`, accepts this DSH version, is not a prerelease, is not deprecated). One package installs at a time and the button shows the progress; when a new version needs a restart, it says so and you press "Restart DSH" beside it. It goes through DSH's own `pluginManager` service — the same path DSH's plugins page takes, with the profile lock and automatic rollback — so on a DSH without that service the button says to run `dsh plugin add` in a terminal instead. Under Settings → General you can switch the button off; the top bar then keeps only "Restart DSH".
+
+**Star**: next to that outline, outside it. It opens this plugin's GitHub repository, where you give the star with your own account — a plugin cannot do that for you.
 
 **Text commands**:
 

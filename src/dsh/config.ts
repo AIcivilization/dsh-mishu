@@ -33,6 +33,10 @@ export interface MishuConfig {
      */
     organise: boolean
   }
+  toolbar: {
+    /** Whether the page's top bar offers "update DSH plugins" beside "restart DSH". */
+    updateButton: boolean
+  }
 }
 
 export const Config: Schema<MishuConfig> = Schema.object({
@@ -59,5 +63,9 @@ export const Config: Schema<MishuConfig> = Schema.object({
   notes: Schema.object({
     organise: Schema.boolean().default(false)
       .description('Let the model add a title, points and a date to a saved note (sends the note text to the model provider)'),
+  }).default({}),
+  toolbar: Schema.object({
+    updateButton: Schema.boolean().default(true)
+      .description('Show "update DSH plugins" next to "restart DSH" on the page\'s top bar'),
   }).default({}),
 }) as Schema<MishuConfig>

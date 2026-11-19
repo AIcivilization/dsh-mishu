@@ -19,7 +19,11 @@ import { TEXT, type UiLang } from './text.ts'
 
 const CATEGORIES = ['document', 'bill', 'birthday', 'renewal', 'other'] as const
 
-export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale: () => string; openChat: OpenChat }) {
+export function MishuSettings({ lang, locale, openChat, onSaved }: {
+  lang: UiLang; locale: () => string; openChat: OpenChat
+  /** Called after a save, so the board behind the page picks up the change at once. */
+  onSaved?: () => void
+}) {
   const t = TEXT[lang]
   const [view, setView] = useState<SettingsView | undefined>()
   const [error, setError] = useState<string | undefined>()
@@ -37,6 +41,7 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
       setLead(result.view.settings.leadDays)
       setError(undefined)
       setNote(saved)
+      onSaved?.()
     } else {
       setError(result.message)
     }
@@ -185,6 +190,15 @@ export function MishuSettings({ lang, locale, openChat }: { lang: UiLang; locale
           {t.sNotesOrganise}
         </label>
         <p className="mishu-hint">{t.sNotesPrivacy}</p>
+        <label className="mishu-field mishu-checkbox">
+          <input
+            type="checkbox"
+            checked={view.settings.toolbar.updateButton}
+            onChange={e => { void save({ toolbar: { updateButton: e.target.checked } }) }}
+          />
+          {t.sToolbarUpdate}
+        </label>
+        <p className="mishu-hint">{t.sToolbarHint}</p>
       </Fold>
     </div>
     </FoldGroup>

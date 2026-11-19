@@ -20,6 +20,7 @@ import {
   type NewDraft, type PreparedMail, type SendResult,
 } from '../core/index.ts'
 import type { MishuConfig } from './config.ts'
+import type { PluginUpdater } from '../core/plugin-update.ts'
 import { ScheduleBridge, type ScheduleLike } from './schedule.ts'
 
 interface Logger { info(message: string): void; warn(message: string): void }
@@ -45,6 +46,11 @@ export class Runtime {
    * once the `schedule` service shows up; absent on a Host without it.
    */
   schedule: ScheduleBridge | undefined
+  /**
+   * Every installed plugin's update run, when this Host has a plugin manager.
+   * The page's "update DSH plugins" button reads and starts it.
+   */
+  updater: PluginUpdater | undefined
 
   constructor(
     config: MishuConfig,
@@ -67,6 +73,7 @@ export class Runtime {
       markRead: this.config.github.markRead,
       leadDays: this.config.leadDays,
       notes: { organise: this.config.notes.organise },
+      toolbar: { updateButton: this.config.toolbar.updateButton },
     }
   }
 
@@ -526,7 +533,7 @@ export class Runtime {
   /** The board as the brief describes it. */
   board(now: number, lang: Lang = this.lang()) {
     const settings = this.settings()
-    return buildBoard(this.store!, { now, lang, github: { enabled: settings.githubEnabled, markRead: settings.markRead }, mailAccounts: this.accounts(), watches: this.watches() })
+    return buildBoard(this.store!, { now, lang, github: { enabled: settings.githubEnabled, markRead: settings.markRead }, mailAccounts: this.accounts(), watches: this.watches(), updateButton: settings.toolbar.updateButton })
   }
 
   /** Send what is due now: urgent items, the daily brief. One at a time. */

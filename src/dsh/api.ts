@@ -121,6 +121,7 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       now: at, lang, github: { enabled: settings.githubEnabled, markRead: settings.markRead },
       mailAccounts: runtime.accounts(),
       watches: runtime.watches(),
+      updateButton: settings.toolbar.updateButton,
     })
   }
 
@@ -503,6 +504,38 @@ export function apiHandlers(runtime: Runtime, clock: () => number = Date.now): R
       const plan = runtime.restarter.plan()
       if (plan.kind === 'none') throw new ApiError(plan.why[langOf(body)])
       return { restarting: true, ...runtime.restarter.schedule(plan) }
+    },
+
+    // ── updating every installed plugin ───────────────────
+
+    /** Whether this Host can install plugins from here, and how the last run went. */
+    '/plugins/update/info': async (body) => {
+      const updater = runtime.updater
+      const lang = langOf(body)
+      if (updater === undefined) {
+        return {
+          supported: false,
+          why: lang === 'zh'
+            ? '这个 DSH 没有插件管理服务，装不了插件：在终端里运行 dsh plugin add <包名>，再重启 DSH。'
+            : 'This DSH has no plugin manager, so nothing can be installed from here: run dsh plugin add <name> in a terminal, then restart DSH.',
+          report: null,
+        }
+      }
+      return { supported: true, report: updater.report() }
+    },
+
+    /** Start (or join) one run over every installed plugin that has a newer version. */
+    '/plugins/update': async (body) => {
+      const updater = runtime.updater
+      if (updater === undefined) {
+        throw new ApiError(langOf(body) === 'zh'
+          ? '这个 DSH 没有插件管理服务，装不了插件：在终端里运行 dsh plugin add <包名>，再重启 DSH。'
+          : 'This DSH has no plugin manager: run dsh plugin add <name> in a terminal, then restart DSH.')
+      }
+      // The run installs one package at a time and can take minutes, so the
+      // page polls `/plugins/update/info` instead of holding one request open.
+      void updater.start()
+      return { started: true, report: updater.report() }
     },
 
     // ── reading, searching, writing mail ──────────────────

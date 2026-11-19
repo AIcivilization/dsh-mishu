@@ -131,6 +131,8 @@ export interface SettingsView {
     leadDays: Record<string, number>
     /** The note tab: whether note text may go to the model. Off unless turned on. */
     notes: { organise: boolean }
+    /** The top bar: whether "update DSH plugins" sits beside "restart DSH". */
+    toolbar: { updateButton: boolean }
   }
   github: {
     tokenEnv: string
@@ -176,6 +178,26 @@ export type AccountDraft = Partial<Omit<AccountView, 'hasPassword' | 'envName' |
 export const restartApi = {
   info: (lang: string) => post<{ supported: true } | { supported: false; why: string }>('/restart/info', { lang }),
   restart: (lang: string) => post<{ restarting: true; reconnect?: boolean }>('/restart', { lang }),
+}
+
+/** One plugin update run, as the host reports it. */
+export interface PluginUpdateReport {
+  running: boolean
+  startedAt: number | null
+  finishedAt: number | null
+  total: number
+  current: string | null
+  updated: Array<{ name: string; from: string; to: string }>
+  failed: Array<{ name: string; error: string }>
+  skipped: Array<{ name: string; why: string }>
+  restartNeeded: boolean
+  error: string | null
+}
+
+export const pluginUpdateApi = {
+  info: (lang: string) =>
+    post<{ supported: true; report: PluginUpdateReport | null } | { supported: false; why: string; report: null }>('/plugins/update/info', { lang }),
+  start: (lang: string) => post<{ started: true; report: PluginUpdateReport }>('/plugins/update', { lang }),
 }
 
 export interface NotifySettingsView {

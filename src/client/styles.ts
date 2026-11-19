@@ -113,6 +113,18 @@ export const STYLES = `
 .mishu-code{font:600 26px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:3px;user-select:all;padding:4px 10px;border-radius:8px;background:${LAYER2}}
 .mishu-add>.mishu-hint{margin-bottom:8px}
 .mishu-title{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+/* "Restart DSH" and "update DSH plugins" in one outline: both act on the Host itself. */
+.mishu-dsh-wrap{display:inline-flex;flex-direction:column;align-items:flex-start;gap:4px}
+.mishu-dsh-row{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* One outline around the two buttons that act on the Host itself; the thin rule keeps them apart. */
+.mishu-dsh-group{display:inline-flex;align-items:center;gap:2px;padding:2px;border:1px solid ${LINE_STRONG};border-radius:9px;background:${LAYER1}}
+.mishu-dsh-group .mishu-btn{border-color:transparent}
+.mishu-dsh-group .mishu-btn:hover:not(:disabled){background:${LAYER2}}
+.mishu-dsh-sep{width:1px;align-self:stretch;margin:3px 2px;background:${LINE_STRONG}}
+.mishu-status{white-space:pre-wrap;max-width:46ch}
+.mishu-star{display:inline-flex;align-items:center;gap:4px;text-decoration:none}
+.mishu-star svg{flex:none}
+.mishu-star:hover{color:${ACCENT};border-color:${ACCENT}}
 .mishu-tabs{display:flex;gap:2px;background:${LAYER1};border-radius:8px;padding:2px}
 .mishu-tabs button{font:inherit;font-size:13px;color:${MUTED};background:transparent;border:0;border-radius:6px;padding:3px 12px;cursor:pointer}
 .mishu-tabs button.active{background:${LAYER2};color:${TEXT}}

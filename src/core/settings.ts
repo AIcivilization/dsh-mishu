@@ -21,6 +21,8 @@ export interface Defaults {
   leadDays: Record<Category, number>
   /** The note tab: whether a model may trim a saved note. Off unless you turn it on. */
   notes: { organise: boolean }
+  /** The page's top bar: whether "update DSH plugins" sits next to "restart DSH". */
+  toolbar: { updateButton: boolean }
 }
 
 export interface UserSettings {
@@ -29,6 +31,7 @@ export interface UserSettings {
   markRead?: MarkReadMode
   leadDays?: Partial<Record<Category, number>>
   notes?: { organise?: boolean }
+  toolbar?: { updateButton?: boolean }
 }
 
 const SETTINGS_KEY = 'settings'
@@ -43,6 +46,7 @@ export function effectiveSettings(store: MishuStore, defaults: Defaults): Defaul
     markRead: saved.markRead ?? defaults.markRead,
     leadDays: { ...defaults.leadDays, ...saved.leadDays },
     notes: { organise: saved.notes?.organise ?? defaults.notes.organise },
+    toolbar: { updateButton: saved.toolbar?.updateButton ?? defaults.toolbar?.updateButton ?? true },
   }
 }
 
@@ -69,6 +73,9 @@ export function saveSettings(store: MishuStore, input: UserSettings, now: number
   }
   if (input.notes !== undefined && input.notes.organise !== undefined) {
     next.notes = { ...next.notes ?? {}, organise: input.notes.organise === true }
+  }
+  if (input.toolbar !== undefined && input.toolbar.updateButton !== undefined) {
+    next.toolbar = { ...next.toolbar ?? {}, updateButton: input.toolbar.updateButton === true }
   }
   store.set(SETTINGS_KEY, next)
   store.log(now, 'settings', next)

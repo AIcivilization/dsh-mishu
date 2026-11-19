@@ -18,6 +18,7 @@ import { API_BASE, apiHandlers, handle } from './api.ts'
 import { Runtime } from './runtime.ts'
 import type { ScheduleLike } from './schedule.ts'
 import { MAIL_APPROVAL_TOOLS, mailApproval, registerMailTools, type MailToolDeps } from './mail-tools.ts'
+import { watchPluginManager } from './plugin-manager.ts'
 import { noteHandlers } from './notes-api.ts'
 import { createOrganiser } from './notes-ai.ts'
 import { registerNoteTools } from './notes-tools.ts'
@@ -215,6 +216,10 @@ export function apply(ctx: Context, config: MishuConfig, runtime = new Runtime(c
       counts: store => store.noteCounts(),
     }))) register(path, handler)
   })
+
+  // DSH's own plugin manager: the page's "更新 DSH 插件" button goes through it,
+  // the same path DSH's plugin page takes. Optional on an older Host.
+  watchPluginManager(ctx as unknown as Parameters<typeof watchPluginManager>[0], (updater) => { runtime.updater = updater })
 
   // DSH's own scheduled tasks ("自动化任务"). Optional: a Host without the
   // service simply keeps the brief as a desktop notification.

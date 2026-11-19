@@ -134,14 +134,16 @@ test('accounts keep their password in the keychain only; removing one closes its
 
 test('settings from the page override the config; bad values are refused', () => {
   const store = MishuStore.open(':memory:')
-  const defaults = { language: 'auto' as const, githubEnabled: true, markRead: 'shadow' as const, leadDays: DEFAULT_LEAD_DAYS, notes: { organise: false } }
+  const defaults = { language: 'auto' as const, githubEnabled: true, markRead: 'shadow' as const, leadDays: DEFAULT_LEAD_DAYS, notes: { organise: false }, toolbar: { updateButton: true } }
   saveSettings(store, { language: 'en', markRead: 'off', leadDays: { bill: 5 } }, MAIL_NOW)
-  assert.deepEqual(effectiveSettings(store, defaults), { language: 'en', githubEnabled: true, markRead: 'off', leadDays: { ...DEFAULT_LEAD_DAYS, bill: 5 }, notes: { organise: false } })
+  assert.deepEqual(effectiveSettings(store, defaults), { language: 'en', githubEnabled: true, markRead: 'off', leadDays: { ...DEFAULT_LEAD_DAYS, bill: 5 }, notes: { organise: false }, toolbar: { updateButton: true } })
   assert.deepEqual(effectiveSettings(store, { ...defaults, notes: { organise: true } }).notes, { organise: true }, 'the config default shows through until the page sets one')
   saveSettings(store, { notes: { organise: true } }, MAIL_NOW)
   assert.deepEqual(effectiveSettings(store, defaults).notes, { organise: true }, 'and what the page sets wins')
   assert.throws(() => saveSettings(store, { markRead: 'always' as never }, MAIL_NOW), /mark read must be off, shadow or on/)
   assert.throws(() => saveSettings(store, { leadDays: { bill: -1 } }, MAIL_NOW), /lead days/)
+  saveSettings(store, { toolbar: { updateButton: false } }, MAIL_NOW)
+  assert.deepEqual(effectiveSettings(store, defaults).toolbar, { updateButton: false }, 'the top bar switch is kept, and off means off')
 })
 
 test('the settings API takes a password in and never gives it back', async () => {

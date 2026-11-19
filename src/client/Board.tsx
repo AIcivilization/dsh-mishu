@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { mishuApi, restartApi, type BoardCard, type BoardData, type CardAction, type MatterDetail, type NewItem } from './api.ts'
+import { mishuApi, pluginUpdateApi, restartApi, type BoardCard, type BoardData, type CardAction, type MatterDetail, type NewItem, type PluginUpdateReport } from './api.ts'
 import { AskAI, type OpenChat } from './AskAI.tsx'
 import { cardText } from './cardText.ts'
 import { CopyButton } from './Copy.tsx'
@@ -215,7 +215,7 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
   if (board === undefined) {
     return (
       <div className="mishu-page">
-        <div className="mishu-head"><div className="mishu-title"><h1>{t.title}</h1><RestartButton lang={lang} locale={locale} /></div></div>
+        <div className="mishu-head"><div className="mishu-title"><h1>{t.title}</h1><DshActions lang={lang} locale={locale} showUpdate /></div></div>
         {error === undefined ? <p className="mishu-empty">{t.loading}</p> : <div className="mishu-error">{t.failed}{error}</div>}
       </div>
     )
@@ -262,7 +262,7 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
             <button type="button" role="tab" aria-selected={tab === 'mail'} className={tab === 'mail' ? 'active' : ''} onClick={() => setTab('mail')}>{t.tabMail}</button>
             <button type="button" role="tab" aria-selected={tab === 'settings'} className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>{t.tabSettings}</button>
           </div>
-          <RestartButton lang={lang} locale={locale} />
+          <DshActions lang={lang} locale={locale} showUpdate={board.toolbar.updateButton} />
         </div>
         <div className="mishu-sources">
           <span>
@@ -284,7 +284,7 @@ export function MishuBoard({ locale, openChat }: { locale: () => string; openCha
           <button type="button" className="mishu-btn" disabled={syncing} onClick={() => { void sync() }}>{syncing ? t.syncing : t.sync}</button>
         </div>
       </div>
-      {tab === 'settings' ? <MishuSettings lang={lang} locale={locale} openChat={openChat} /> : null}
+      {tab === 'settings' ? <MishuSettings lang={lang} locale={locale} openChat={openChat} onSaved={() => { void load() }} /> : null}
       {tab === 'mail' ? <MishuMail lang={lang} locale={locale} /> : null}
       {tab === 'notes' ? <MishuNotes lang={lang} locale={locale} openChat={openChat} /> : null}
       {tab === 'settings' || tab === 'mail' || tab === 'notes' ? null : <>
@@ -539,11 +539,38 @@ function AddForm({ lang, locale, onAdded }: { lang: UiLang; locale: () => string
   )
 }
 
+type ActionStatus = { ok: boolean; text: string } | undefined
+
+/**
+ * The buttons that act on DSH itself — "restart DSH" and "update DSH plugins" —
+ * drawn inside one outline, so they read as one group of actions on the Host
+ * rather than as things the secretary does. The Star link sits outside that
+ * outline, because starring is not an action on DSH: it opens this plugin's
+ * GitHub repository, where you star it with your own account. Their one-line
+ * outcomes appear under the row, not inside the outline.
+ */
+function DshActions({ lang, locale, showUpdate }: { lang: UiLang; locale: () => string; showUpdate: boolean }) {
+  const t = TEXT[lang]
+  const [status, setStatus] = useState<ActionStatus>()
+  return (
+    <div className="mishu-dsh-wrap">
+      <div className="mishu-dsh-row">
+        <div className="mishu-dsh-group" role="group" aria-label={t.dshGroup} title={t.dshGroup}>
+          <RestartButton lang={lang} locale={locale} setStatus={setStatus} />
+          {showUpdate ? <><span className="mishu-dsh-sep" aria-hidden="true" /><UpdatePluginsButton lang={lang} locale={locale} setStatus={setStatus} /></> : null}
+        </div>
+        <StarButton lang={lang} />
+      </div>
+      {status === undefined ? null : <span className={status.ok ? 'mishu-hint mishu-status' : 'mishu-hint mishu-status mishu-warn'}>{status.text}</span>}
+    </div>
+  )
+}
+
 /** "Restart DSH", for after plugins were reinstalled or upgraded. Where it cannot work (DSH started from a terminal) it says what to do instead. */
-function RestartButton({ lang, locale }: { lang: UiLang; locale: () => string }) {
+function RestartButton({ lang, locale, setStatus }: { lang: UiLang; locale: () => string; setStatus: (status: ActionStatus) => void }) {
   const t = TEXT[lang]
   const [why, setWhy] = useState<string | undefined>()
-  const [status, setStatus] = useState<{ ok: boolean; text: string } | undefined>()
+  const [busy, setBusy] = useState(false)
   useEffect(() => {
     void restartApi.info(locale()).then((r) => { if (r.ok && !r.supported) setWhy(r.why) })
   }, [locale])
@@ -553,9 +580,11 @@ function RestartButton({ lang, locale }: { lang: UiLang; locale: () => string })
       return
     }
     if (!window.confirm(t.restartConfirm)) return
+    setBusy(true)
     setStatus({ ok: true, text: t.restarting })
     const r = await restartApi.restart(locale())
     if (!r.ok) {
+      setBusy(false)
       setStatus({ ok: false, text: r.message })
     } else if (r.reconnect === true) {
       // On a server the page stays: wait for DSH to go away and come back, then reload.
@@ -564,10 +593,111 @@ function RestartButton({ lang, locale }: { lang: UiLang; locale: () => string })
     }
   }
   return (
-    <>
-      <button type="button" className="mishu-btn" title={why === undefined ? t.restartTip : `${t.restartTip}\n${why}`} disabled={status?.ok === true} onClick={() => { void restart() }}>{t.restart}</button>
-      {status === undefined ? null : <span className={status.ok ? 'mishu-hint' : 'mishu-hint mishu-warn'}>{status.text}</span>}
-    </>
+    <button type="button" className="mishu-btn" title={why === undefined ? t.restartTip : `${t.restartTip}\n${why}`} disabled={busy} onClick={() => { void restart() }}>{t.restart}</button>
+  )
+}
+
+const UPDATE_POLL_MS = 1500
+
+/**
+ * "Update DSH plugins": one run over every installed plugin that has a newer
+ * version. The host does the work and reports progress, so the page polls
+ * instead of holding a request open for the minutes an install can take.
+ */
+function UpdatePluginsButton({ lang, locale, setStatus }: {
+  lang: UiLang; locale: () => string; setStatus: (status: ActionStatus) => void
+}) {
+  const t = TEXT[lang]
+  const [why, setWhy] = useState<string | undefined>()
+  const [running, setRunning] = useState(false)
+  const [progress, setProgress] = useState<string | undefined>()
+  /** Read the host's run in the language on screen now, not the one it started in. */
+  const read = async (): Promise<PluginUpdateReport | undefined> => {
+    const r = await pluginUpdateApi.info(locale())
+    if (!r.ok) return undefined
+    if (!r.supported) {
+      setWhy(r.why)
+      return undefined
+    }
+    return r.report ?? undefined
+  }
+  useEffect(() => { void read() }, [locale])
+  /** The button's own label while a run is going: what is being installed, of how many. */
+  const progressOf = (run: PluginUpdateReport): string => {
+    const done = run.updated.length + run.failed.length
+    return t.updatePluginsRunning(done, Math.max(run.total, done + 1), run.current ?? '…')
+  }
+  const describe = (run: PluginUpdateReport): { ok: boolean; text: string } => {
+    const lines: string[] = []
+    if (run.updated.length === 0 && run.failed.length === 0) lines.push(t.updatePluginsNothing)
+    else lines.push(t.updatePluginsDone(run.updated.length))
+    if (run.failed.length > 0) {
+      const shown = run.failed.slice(0, 3).map(f => t.updatePluginsFailedDetail(f.name, f.error))
+      lines.push([t.updatePluginsFailed(run.failed.length), ...shown, ...run.failed.length > 3 ? ['…'] : []].join('\n'))
+    }
+    if (run.restartNeeded) lines.push(t.updatePluginsRestart)
+    return { ok: run.failed.length === 0, text: lines.join('\n') }
+  }
+  const update = async () => {
+    if (why !== undefined) {
+      setStatus({ ok: false, text: why })
+      return
+    }
+    if (!window.confirm(t.updatePluginsConfirm)) return
+    setRunning(true)
+    setProgress(t.updatePluginsRunning(0, 1, '…'))
+    setStatus(undefined)
+    const started = await pluginUpdateApi.start(locale())
+    if (!started.ok) {
+      setRunning(false)
+      setProgress(undefined)
+      setStatus({ ok: false, text: started.message })
+      return
+    }
+    setProgress(progressOf(started.report))
+    // Poll until the run settles; each answer carries the whole run so far.
+    for (;;) {
+      await new Promise(resolve => setTimeout(resolve, UPDATE_POLL_MS))
+      const run = await read()
+      if (run === undefined) {
+        setRunning(false)
+        setProgress(undefined)
+        return
+      }
+      if (run.running) {
+        setProgress(progressOf(run))
+        continue
+      }
+      setRunning(false)
+      setProgress(undefined)
+      setStatus(run.error === null ? describe(run) : { ok: false, text: run.error })
+      return
+    }
+  }
+  return (
+    <button
+      type="button"
+      className="mishu-btn"
+      title={why !== undefined ? `${t.updatePluginsTip}\n${why}` : progress ?? t.updatePluginsTip}
+      disabled={running}
+      onClick={() => { void update() }}
+    >{progress ?? t.updatePlugins}</button>
+  )
+}
+
+/** The repository this plugin lives in: a star is given by hand, on GitHub. */
+const REPO = 'https://github.com/AIcivilization/dsh-mishu'
+
+/** "Star": opens the repository on GitHub; starring itself needs the visitor's own account. */
+function StarButton({ lang }: { lang: UiLang }) {
+  const t = TEXT[lang]
+  return (
+    <a className="mishu-btn mishu-star" href={REPO} target="_blank" rel="noreferrer" title={t.starTip} aria-label={t.starTitle}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.6 9.7l5.8-.8z" />
+      </svg>
+      {t.star}
+    </a>
   )
 }
 

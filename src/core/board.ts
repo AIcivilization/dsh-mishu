@@ -56,6 +56,8 @@ export interface BoardData {
     watch: Array<{ id: number; label: string; state: 'never' | 'ok' | 'error'; text: string }>
   }
   markRead: MarkReadMode
+  /** What the page's top bar offers beside "restart DSH". */
+  toolbar: { updateButton: boolean }
   columns: { handle: BoardCard[]; remember: BoardCard[]; done: { total: number; groups: DoneGroup[] } }
 }
 
@@ -69,6 +71,8 @@ export interface BoardOptions {
   mailAccounts?: Array<{ id: number; label: string }>
   /** Things you watch yourself, for their status line. */
   watches?: Array<{ id: number; label: string }>
+  /** Whether the top bar shows "update DSH plugins"; on unless turned off. */
+  updateButton?: boolean
 }
 
 const zhOr = (lang: Lang, zh: string, en: string) => (lang === 'zh' ? zh : en)
@@ -209,6 +213,7 @@ export function buildBoard(store: MishuStore, options: BoardOptions): BoardData 
     metrics: { handle: handle.length, overdue, dueSoon, closedToday, shadow },
     sources: { github, manual: { series: store.activeSeries().length }, mail, watch },
     markRead: options.github.markRead,
+    toolbar: { updateButton: options.updateButton ?? true },
     columns: {
       handle: handle.map(m => matterCard(store, m, today, now, lang, 'handle')),
       remember: [...snoozed.map(m => matterCard(store, m, today, now, lang, 'remember')), ...seriesCards.map(s => s.card)],
